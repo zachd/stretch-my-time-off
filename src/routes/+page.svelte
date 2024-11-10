@@ -4,6 +4,7 @@
     import enLocale from 'i18n-iso-countries/langs/en.json';
     import CalendarMonth from '../lib/CalendarMonth.svelte';
     import { getHolidaysForYear, optimizeDaysOff, calculateConsecutiveDaysOff } from '../lib/holidayUtils.js';
+    import { ptoData } from '../lib/ptoData.js';
 
     countries.registerLocale(enLocale);
     let countriesList = countries.getNames('en');
@@ -12,7 +13,7 @@
     let months = Array.from({ length: 12 }, (_, i) => i);
     let selectedCountry = 'Belgium';
     let holidays = [];
-    let daysOff = 24;
+    let daysOff = ptoData['BE'];
     let optimizedDaysOff = [];
     let consecutiveDaysOff = [];
 
@@ -26,6 +27,7 @@
         const countryCode = Object.keys(countriesList).find(code => countriesList[code] === countryName);
         if (countryCode) {
             selectedCountry = countryName;
+            daysOff = ptoData[countryCode] || 0;
             updateHolidays();
         }
     }
