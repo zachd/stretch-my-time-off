@@ -71,10 +71,6 @@
         let daysToUse = daysOff;
 
         for (let month = 0; month < 12; month++) {
-            let currentStreak = [];
-            let maxStreak = [];
-            let maxStreakStart = null;
-
             for (let day = 1; day <= 31; day++) {
                 const date = new Date(year, month, day);
                 if (date.getMonth() !== month) break; // Skip invalid dates
@@ -82,24 +78,18 @@
                 const isWeekend = date.getDay() === 0 || date.getDay() === 6;
                 const isHoliday = allDays.some(d => d.getTime() === date.getTime());
 
-                if (isWeekend || isHoliday) {
-                    currentStreak.push(date);
-                } else {
-                    if (currentStreak.length > maxStreak.length) {
-                        maxStreak = [...currentStreak];
-                        maxStreakStart = currentStreak[0];
-                    }
-                    currentStreak = [];
-                }
-            }
+                // Check if the day before or after a weekend/holiday can be used to extend it
+                if ((isWeekend || isHoliday) && daysToUse > 0) {
+                    const prevDay = new Date(date);
+                    prevDay.setDate(date.getDate() - 1);
+                    const nextDay = new Date(date);
+                    nextDay.setDate(date.getDate() + 1);
 
-            // Use days off to extend the longest streak in the current month
-            if (maxStreakStart && daysToUse > 0) {
-                let date = new Date(maxStreakStart);
-                while (daysToUse > 0 && date.getFullYear() === year) {
-                    date.setDate(date.getDate() - 1);
-                    if (!allDays.some(d => d.getTime() === date.getTime()) && date.getDay() !== 0 && date.getDay() !== 6) {
-                        optimizedDaysOff.push(new Date(date));
+                    if (!allDays.some(d => d.getTime() === prevDay.getTime()) && prevDay.getDay() !== 0 && prevDay.getDay() !== 6) {
+                        optimizedDaysOff.push(new Date(prevDay));
+                        daysToUse--;
+                    } else if (!allDays.some(d => d.getTime() === nextDay.getTime()) && nextDay.getDay() !== 0 && nextDay.getDay() !== 6) {
+                        optimizedDaysOff.push(new Date(nextDay));
                         daysToUse--;
                     }
                 }
