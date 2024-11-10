@@ -68,7 +68,7 @@
         background-color: #333;
     }
     .holiday {
-        background-color: #555;
+        background-color: #3b1e6e;
         cursor: pointer;
     }
     .optimized {

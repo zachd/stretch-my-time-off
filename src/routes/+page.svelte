@@ -13,6 +13,7 @@
     let holidays = [];
     let daysOff = 24; // Default days off per year
     let optimizedDaysOff = [];
+    let extendedHolidays = [];
 
     function handleYearChange(event) {
         year = parseInt(event.target.value);
@@ -40,7 +41,125 @@
                 }));
             console.log('Holidays:', holidays);
             optimizeDaysOff();
+            calculateExtendedHolidays();
         }
+    }
+
+    function optimizeDaysOff() {
+        // Reset optimized days off
+        optimizedDaysOff = [];
+
+        // Combine holidays and weekends
+        const allDays = holidays.map(h => h.date);
+        let daysToUse = daysOff;
+
+        // Create a list of potential days to take off, sorted by their potential to extend holidays
+        const potentialDaysOff = [];
+
+        for (let month = 0; month < 12; month++) {
+            for (let day = 1; day <= 31; day++) {
+                const date = new Date(year, month, day);
+                if (date.getMonth() !== month) break; // Skip invalid dates
+
+                const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+                const isHoliday = allDays.some(d => d.getTime() === date.getTime());
+
+                if (!isWeekend && !isHoliday) {
+                    const prevDay = new Date(date);
+                    prevDay.setDate(date.getDate() - 1);
+                    const nextDay = new Date(date);
+                    nextDay.setDate(date.getDate() + 1);
+
+                    const extendsHoliday = 
+                        allDays.some(d => d.getTime() === prevDay.getTime()) ||
+                        allDays.some(d => d.getTime() === nextDay.getTime());
+
+                    if (extendsHoliday) {
+                        potentialDaysOff.push(date);
+                    }
+                }
+            }
+        }
+
+        // Sort potential days off by their ability to extend existing chains with multiple holidays
+        potentialDaysOff.sort((a, b) => {
+            const aConsecutive = calculateConsecutiveDaysIncludingHoliday(a, allDays);
+            const bConsecutive = calculateConsecutiveDaysIncludingHoliday(b, allDays);
+            return bConsecutive - aConsecutive || a.getTime() - b.getTime();
+        });
+
+        // Select days off from the sorted list, prioritizing those that extend chains with multiple holidays
+        for (let i = 0; i < potentialDaysOff.length && daysToUse > 0; i++) {
+            const date = potentialDaysOff[i];
+            const prevDay = new Date(date);
+            prevDay.setDate(date.getDate() - 1);
+            const nextDay = new Date(date);
+            nextDay.setDate(date.getDate() + 1);
+
+            // Check if adding this day creates a longer chain with multiple holidays
+            if (calculateConsecutiveDaysIncludingHoliday(date, allDays) > 0) {
+                optimizedDaysOff.push(date);
+                daysToUse--;
+            }
+        }
+
+        // Attempt to create full week chains
+        if (daysToUse > 0) {
+            for (let i = 0; i < optimizedDaysOff.length && daysToUse > 0; i++) {
+                const date = optimizedDaysOff[i];
+                const startOfWeek = new Date(date);
+                startOfWeek.setDate(date.getDate() - date.getDay() + 1); // Start of the week (Monday)
+                const endOfWeek = new Date(startOfWeek);
+                endOfWeek.setDate(startOfWeek.getDate() + 4); // End of the week (Friday)
+
+                for (let d = new Date(startOfWeek); d <= endOfWeek && daysToUse > 0; d.setDate(d.getDate() + 1)) {
+                    if (!optimizedDaysOff.some(optDate => optDate.getTime() === d.getTime()) && !allDays.some(holiday => holiday.getTime() === d.getTime())) {
+                        optimizedDaysOff.push(new Date(d));
+                        daysToUse--;
+                    }
+                }
+            }
+        }
+
+        console.log('Optimized Days Off:', optimizedDaysOff);
+    }
+
+    function calculateConsecutiveDaysIncludingHoliday(date, allDays) {
+        let consecutiveDays = 0;
+        let prevDay = new Date(date);
+        let nextDay = new Date(date);
+        let includesHoliday = false;
+        let holidayCount = 0;
+
+        // Count consecutive days before the date
+        while (true) {
+            prevDay.setDate(prevDay.getDate() - 1);
+            if (prevDay.getDay() === 0 || prevDay.getDay() === 6 || allDays.some(d => d.getTime() === prevDay.getTime())) {
+                consecutiveDays++;
+                if (allDays.some(d => d.getTime() === prevDay.getTime())) {
+                    includesHoliday = true;
+                    holidayCount++;
+                }
+            } else {
+                break;
+            }
+        }
+
+        // Count consecutive days after the date
+        while (true) {
+            nextDay.setDate(nextDay.getDate() + 1);
+            if (nextDay.getDay() === 0 || nextDay.getDay() === 6 || allDays.some(d => d.getTime() === nextDay.getTime())) {
+                consecutiveDays++;
+                if (allDays.some(d => d.getTime() === nextDay.getTime())) {
+                    includesHoliday = true;
+                    holidayCount++;
+                }
+            } else {
+                break;
+            }
+        }
+
+        return includesHoliday ? holidayCount : 0;
     }
 
     function formatDate(date) {
@@ -52,6 +171,7 @@
         if (!isNaN(value)) {
             daysOff = value;
             optimizeDaysOff();
+            calculateExtendedHolidays();
         } else {
             event.target.textContent = daysOff; // Revert to previous valid value if input is invalid
         }
@@ -62,41 +182,107 @@
         event.target.textContent = value.replace(/\D/g, '');
     }
 
-    function optimizeDaysOff() {
-        // Reset optimized days off
-        optimizedDaysOff = [];
+    function calculateExtendedHolidays() {
+        const allDays = holidays.map(h => h.date); // Include all holiday dates
+        let remainingDaysOff = daysOff; // Track remaining days off
 
-        // Combine holidays and weekends
-        const allDays = holidays.map(h => h.date);
-        let daysToUse = daysOff;
+        extendedHolidays = holidays
+            .filter(holiday => holiday.date.getDay() !== 0 && holiday.date.getDay() !== 6) // Only non-weekend holidays
+            .map(holiday => {
+                let startDate = new Date(holiday.date);
+                let endDate = new Date(holiday.date);
+                let daysUsed = 0;
 
-        for (let month = 0; month < 12; month++) {
-            for (let day = 1; day <= 31; day++) {
-                const date = new Date(year, month, day);
-                if (date.getMonth() !== month) break; // Skip invalid dates
-
-                const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-                const isHoliday = allDays.some(d => d.getTime() === date.getTime());
-
-                // Check if the day before or after a weekend/holiday can be used to extend it
-                if ((isWeekend || isHoliday) && daysToUse > 0) {
-                    const prevDay = new Date(date);
-                    prevDay.setDate(date.getDate() - 1);
-                    const nextDay = new Date(date);
-                    nextDay.setDate(date.getDate() + 1);
-
+                // Extend before the holiday
+                while (daysUsed < remainingDaysOff) {
+                    const prevDay = new Date(startDate);
+                    prevDay.setDate(startDate.getDate() - 1);
                     if (!allDays.some(d => d.getTime() === prevDay.getTime()) && prevDay.getDay() !== 0 && prevDay.getDay() !== 6) {
-                        optimizedDaysOff.push(new Date(prevDay));
-                        daysToUse--;
-                    } else if (!allDays.some(d => d.getTime() === nextDay.getTime()) && nextDay.getDay() !== 0 && nextDay.getDay() !== 6) {
-                        optimizedDaysOff.push(new Date(nextDay));
-                        daysToUse--;
+                        startDate = prevDay;
+                        daysUsed++;
+                    } else {
+                        break;
                     }
                 }
+
+                // Extend after the holiday
+                while (daysUsed < remainingDaysOff) {
+                    const nextDay = new Date(endDate);
+                    nextDay.setDate(endDate.getDate() + 1);
+                    if (!allDays.some(d => d.getTime() === nextDay.getTime()) && nextDay.getDay() !== 0 && nextDay.getDay() !== 6) {
+                        endDate = nextDay;
+                        daysUsed++;
+                    } else {
+                        break;
+                    }
+                }
+
+                remainingDaysOff -= daysUsed; // Deduct used days from remaining
+
+                // Calculate total consecutive days including weekends
+                const totalDays = calculateTotalConsecutiveDays(startDate, endDate, allDays);
+
+                return {
+                    holidayName: holiday.name,
+                    startDate: formatDate(startDate),
+                    endDate: formatDate(endDate),
+                    totalDays
+                };
+            });
+
+        // If there are remaining days off, try to use them to extend any holiday further
+        if (remainingDaysOff > 0) {
+            extendedHolidays.forEach(extended => {
+                let startDate = new Date(extended.startDate);
+                let endDate = new Date(extended.endDate);
+
+                // Extend before the holiday
+                while (remainingDaysOff > 0) {
+                    const prevDay = new Date(startDate);
+                    prevDay.setDate(startDate.getDate() - 1);
+                    if (!allDays.some(d => d.getTime() === prevDay.getTime()) && prevDay.getDay() !== 0 && prevDay.getDay() !== 6) {
+                        startDate = prevDay;
+                        remainingDaysOff--;
+                    } else {
+                        break;
+                    }
+                }
+
+                // Extend after the holiday
+                while (remainingDaysOff > 0) {
+                    const nextDay = new Date(endDate);
+                    nextDay.setDate(endDate.getDate() + 1);
+                    if (!allDays.some(d => d.getTime() === nextDay.getTime()) && nextDay.getDay() !== 0 && nextDay.getDay() !== 6) {
+                        endDate = nextDay;
+                        remainingDaysOff--;
+                    } else {
+                        break;
+                    }
+                }
+
+                extended.startDate = formatDate(startDate);
+                extended.endDate = formatDate(endDate);
+                extended.totalDays = calculateTotalConsecutiveDays(startDate, endDate, allDays);
+            });
+        }
+    }
+
+    function calculateTotalConsecutiveDays(startDate, endDate, allDays) {
+        let totalDays = 0;
+        let currentDate = new Date(startDate);
+
+        while (currentDate <= endDate) {
+            const isWeekend = currentDate.getDay() === 0 || currentDate.getDay() === 6;
+            const isHoliday = allDays.some(d => d.getTime() === currentDate.getTime());
+
+            if (isWeekend || isHoliday || optimizedDaysOff.some(d => d.getTime() === currentDate.getTime())) {
+                totalDays++;
             }
+
+            currentDate.setDate(currentDate.getDate() + 1);
         }
 
-        console.log('Optimized Days Off:', optimizedDaysOff);
+        return totalDays;
     }
 
     // Initialize holidays on load
@@ -201,11 +387,11 @@
     </div>
 
     <div>
-        There are {holidays.length} public holidays in {selectedCountry}:
+        Extended Holidays:
         <ul>
-            {#each holidays as holiday}
-                <li class={optimizedDaysOff.some(d => d.getTime() === holiday.date.getTime()) ? 'highlight' : ''}>
-                    {holiday.name} on {formatDate(holiday.date)}
+            {#each extendedHolidays as extended}
+                <li>
+                    {extended.totalDays} day holiday, including {extended.holidayName} from {extended.startDate} to {extended.endDate}
                 </li>
             {/each}
         </ul>
