@@ -16,6 +16,9 @@
     let daysOff = ptoData['BE'];
     let optimizedDaysOff = [];
     let consecutiveDaysOff = [];
+    let placeholder = "Country";
+    let isFirstClick = true;
+    let inputElement;
 
     function handleYearChange(event) {
         year = parseInt(event.target.value);
@@ -23,13 +26,25 @@
     }
 
     function handleCountryChange(event) {
-        const countryName = event.target.value;
-        const countryCode = Object.keys(countriesList).find(code => countriesList[code] === countryName);
+        const fullValue = event.target.value;
+        const countryCode = Object.keys(countriesList).find(code => countriesList[code] === fullValue);
         if (countryCode) {
-            selectedCountry = countryName;
+            selectedCountry = fullValue;
             daysOff = ptoData[countryCode] || 0;
             updateHolidays();
         }
+        adjustInputWidth(event.target);
+    }
+
+    function adjustInputWidth(inputElement) {
+        const tempSpan = document.createElement('span');
+        tempSpan.style.visibility = 'hidden';
+        tempSpan.style.position = 'absolute';
+        tempSpan.style.whiteSpace = 'nowrap';
+        tempSpan.textContent = inputElement.value || inputElement.placeholder;
+        document.body.appendChild(tempSpan);
+        inputElement.style.width = `${tempSpan.offsetWidth + 30}px`;
+        document.body.removeChild(tempSpan);
     }
 
     function updateHolidays() {
@@ -68,11 +83,23 @@
         }
     }
 
+    function getFlagEmoji(countryCode) {
+        return countryCode
+            .toUpperCase()
+            .replace(/./g, char => String.fromCodePoint(127397 + char.charCodeAt()));
+    }
+
     onMount(() => {
         window.addEventListener('keydown', handleKeyDown);
         return () => {
             window.removeEventListener('keydown', handleKeyDown);
         };
+        adjustInputWidth(inputElement);
+        inputElement.addEventListener('input', () => adjustInputWidth(inputElement));
+        inputElement.addEventListener('focus', () => {
+            inputElement.value = '';
+            adjustInputWidth(inputElement);
+        });
     });
 
     updateHolidays();
@@ -171,10 +198,18 @@
         color: inherit;
         font-size: inherit;
         font-family: inherit;
-        width: auto;
         text-align: center;
         margin: 0 10px;
         outline: none;
+        transition: width 0.2s;
+        -webkit-appearance: none; /* Remove default styling */
+        -moz-appearance: none;
+        appearance: none;
+        color: #e0e0e0; /* Default text color */
+    }
+
+    .editable-input::placeholder {
+        color: #a0a0a0; /* Slightly grayer text for placeholder */
     }
 
     .arrow-controls {
@@ -213,17 +248,22 @@
         font-weight: bold;
         font-size: 1.2em;
     }
+
+    .flag {
+        font-size: 2em; /* Adjust the size as needed */
+    }
 </style>
 
 <header>
-    <h1>Stretch My Holidays</h1>
+    <h1>Stretch My Time Off</h1>
 </header>
 
 <main>
     <div class="content-box">
         <p>
             I live in 
-            <input list="countries" class="editable-input bold" bind:value={selectedCountry} on:change={handleCountryChange} aria-label="Select country" />
+            <span class="flag">{getFlagEmoji(Object.keys(countriesList).find(code => countriesList[code] === selectedCountry))}</span>
+            <input bind:this={inputElement} list="countries" class="editable-input bold" bind:value={selectedCountry} placeholder={placeholder} on:input={adjustInputWidth} on:focus={() => { inputElement.value = ''; adjustInputWidth(); }} on:change={handleCountryChange} aria-label="Select country" />
             and have 
             <span class="arrow-controls">
                 <button on:click={() => { daysOff++; updateHolidays(); }} aria-label="Increase days off">▲</button>
@@ -238,8 +278,8 @@
         </p>
 
         <datalist id="countries">
-            {#each Object.values(countriesList) as name}
-                <option value={name}></option>
+            {#each Object.entries(countriesList) as [code, name]}
+                <option value={name}>{name}</option>
             {/each}
         </datalist>
     </div>
@@ -256,5 +296,5 @@
 </main>
 
 <footer>
-    <p>© 2023 Stretch My Holidays. All rights reserved.</p>
+    <p>© { new Date().getFullYear() } Stretch My Time Off. All rights reserved.</p>
 </footer> 
