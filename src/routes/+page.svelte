@@ -1,19 +1,20 @@
 <script>
+    import { onMount } from 'svelte';
     import countries from 'i18n-iso-countries';
     import enLocale from 'i18n-iso-countries/langs/en.json';
     import CalendarMonth from '../lib/CalendarMonth.svelte';
-    import Holidays from 'date-holidays';
+    import { getHolidaysForYear, optimizeDaysOff, calculateConsecutiveDaysOff } from '../lib/holidayUtils.js';
 
     countries.registerLocale(enLocale);
     let countriesList = countries.getNames('en');
 
     let year = new Date().getFullYear();
     let months = Array.from({ length: 12 }, (_, i) => i);
-    let selectedCountry = 'Belgium'; // Default country name
+    let selectedCountry = 'Belgium';
     let holidays = [];
-    let daysOff = 24; // Default days off per year
+    let daysOff = 24;
     let optimizedDaysOff = [];
-    let extendedHolidays = [];
+    let consecutiveDaysOff = [];
 
     function handleYearChange(event) {
         year = parseInt(event.target.value);
@@ -32,376 +33,226 @@
     function updateHolidays() {
         const countryCode = Object.keys(countriesList).find(code => countriesList[code] === selectedCountry);
         if (countryCode) {
-            const hd = new Holidays(countryCode);
-            holidays = hd.getHolidays(year)
-                .filter(holiday => holiday.type === 'public') // Filter for public holidays
-                .map(holiday => ({
-                    date: new Date(holiday.date),
-                    name: holiday.name
-                }));
-            console.log('Holidays:', holidays);
-            optimizeDaysOff();
-            calculateExtendedHolidays();
+            holidays = getHolidaysForYear(countryCode, year);
+            optimizedDaysOff = optimizeDaysOff(holidays, year, daysOff);
+            consecutiveDaysOff = calculateConsecutiveDaysOff(holidays, optimizedDaysOff, year);
         }
     }
 
-    function optimizeDaysOff() {
-        // Reset optimized days off
-        optimizedDaysOff = [];
-
-        // Combine holidays and weekends
-        const allDays = holidays.map(h => h.date);
-        let daysToUse = daysOff;
-
-        // Create a list of potential days to take off, sorted by their potential to extend holidays
-        const potentialDaysOff = [];
-
-        for (let month = 0; month < 12; month++) {
-            for (let day = 1; day <= 31; day++) {
-                const date = new Date(year, month, day);
-                if (date.getMonth() !== month) break; // Skip invalid dates
-
-                const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-                const isHoliday = allDays.some(d => d.getTime() === date.getTime());
-
-                if (!isWeekend && !isHoliday) {
-                    const prevDay = new Date(date);
-                    prevDay.setDate(date.getDate() - 1);
-                    const nextDay = new Date(date);
-                    nextDay.setDate(date.getDate() + 1);
-
-                    const extendsHoliday = 
-                        allDays.some(d => d.getTime() === prevDay.getTime()) ||
-                        allDays.some(d => d.getTime() === nextDay.getTime());
-
-                    if (extendsHoliday) {
-                        potentialDaysOff.push(date);
-                    }
-                }
-            }
-        }
-
-        // Sort potential days off by their ability to extend existing chains with multiple holidays
-        potentialDaysOff.sort((a, b) => {
-            const aConsecutive = calculateConsecutiveDaysIncludingHoliday(a, allDays);
-            const bConsecutive = calculateConsecutiveDaysIncludingHoliday(b, allDays);
-            return bConsecutive - aConsecutive || a.getTime() - b.getTime();
-        });
-
-        // Select days off from the sorted list, prioritizing those that extend chains with multiple holidays
-        for (let i = 0; i < potentialDaysOff.length && daysToUse > 0; i++) {
-            const date = potentialDaysOff[i];
-            const prevDay = new Date(date);
-            prevDay.setDate(date.getDate() - 1);
-            const nextDay = new Date(date);
-            nextDay.setDate(date.getDate() + 1);
-
-            // Check if adding this day creates a longer chain with multiple holidays
-            if (calculateConsecutiveDaysIncludingHoliday(date, allDays) > 0) {
-                optimizedDaysOff.push(date);
-                daysToUse--;
-            }
-        }
-
-        // Attempt to create full week chains
-        if (daysToUse > 0) {
-            for (let i = 0; i < optimizedDaysOff.length && daysToUse > 0; i++) {
-                const date = optimizedDaysOff[i];
-                const startOfWeek = new Date(date);
-                startOfWeek.setDate(date.getDate() - date.getDay() + 1); // Start of the week (Monday)
-                const endOfWeek = new Date(startOfWeek);
-                endOfWeek.setDate(startOfWeek.getDate() + 4); // End of the week (Friday)
-
-                for (let d = new Date(startOfWeek); d <= endOfWeek && daysToUse > 0; d.setDate(d.getDate() + 1)) {
-                    if (!optimizedDaysOff.some(optDate => optDate.getTime() === d.getTime()) && !allDays.some(holiday => holiday.getTime() === d.getTime())) {
-                        optimizedDaysOff.push(new Date(d));
-                        daysToUse--;
-                    }
-                }
-            }
-        }
-
-        console.log('Optimized Days Off:', optimizedDaysOff);
-    }
-
-    function calculateConsecutiveDaysIncludingHoliday(date, allDays) {
-        let consecutiveDays = 0;
-        let prevDay = new Date(date);
-        let nextDay = new Date(date);
-        let includesHoliday = false;
-        let holidayCount = 0;
-
-        // Count consecutive days before the date
-        while (true) {
-            prevDay.setDate(prevDay.getDate() - 1);
-            if (prevDay.getDay() === 0 || prevDay.getDay() === 6 || allDays.some(d => d.getTime() === prevDay.getTime())) {
-                consecutiveDays++;
-                if (allDays.some(d => d.getTime() === prevDay.getTime())) {
-                    includesHoliday = true;
-                    holidayCount++;
-                }
-            } else {
+    function handleKeyDown(event) {
+        switch (event.key) {
+            case 'ArrowRight':
+                event.preventDefault();
+                year++;
+                updateHolidays();
                 break;
-            }
-        }
-
-        // Count consecutive days after the date
-        while (true) {
-            nextDay.setDate(nextDay.getDate() + 1);
-            if (nextDay.getDay() === 0 || nextDay.getDay() === 6 || allDays.some(d => d.getTime() === nextDay.getTime())) {
-                consecutiveDays++;
-                if (allDays.some(d => d.getTime() === nextDay.getTime())) {
-                    includesHoliday = true;
-                    holidayCount++;
-                }
-            } else {
+            case 'ArrowLeft':
+                event.preventDefault();
+                year--;
+                updateHolidays();
                 break;
-            }
-        }
-
-        return includesHoliday ? holidayCount : 0;
-    }
-
-    function formatDate(date) {
-        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    }
-
-    function handleDaysOffChange(event) {
-        const value = parseInt(event.target.textContent);
-        if (!isNaN(value)) {
-            daysOff = value;
-            optimizeDaysOff();
-            calculateExtendedHolidays();
-        } else {
-            event.target.textContent = daysOff; // Revert to previous valid value if input is invalid
+            case 'ArrowUp':
+                event.preventDefault();
+                daysOff++;
+                updateHolidays();
+                break;
+            case 'ArrowDown':
+                event.preventDefault();
+                if (daysOff > 0) {
+                    daysOff--;
+                    updateHolidays();
+                }
+                break;
         }
     }
 
-    function handleDaysOffInput(event) {
-        const value = event.target.textContent;
-        event.target.textContent = value.replace(/\D/g, '');
-    }
+    onMount(() => {
+        window.addEventListener('keydown', handleKeyDown);
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+        };
+    });
 
-    function calculateExtendedHolidays() {
-        const allDays = holidays.map(h => h.date); // Include all holiday dates
-        let remainingDaysOff = daysOff; // Track remaining days off
-
-        extendedHolidays = holidays
-            .filter(holiday => holiday.date.getDay() !== 0 && holiday.date.getDay() !== 6) // Only non-weekend holidays
-            .map(holiday => {
-                let startDate = new Date(holiday.date);
-                let endDate = new Date(holiday.date);
-                let daysUsed = 0;
-
-                // Extend before the holiday
-                while (daysUsed < remainingDaysOff) {
-                    const prevDay = new Date(startDate);
-                    prevDay.setDate(startDate.getDate() - 1);
-                    if (!allDays.some(d => d.getTime() === prevDay.getTime()) && prevDay.getDay() !== 0 && prevDay.getDay() !== 6) {
-                        startDate = prevDay;
-                        daysUsed++;
-                    } else {
-                        break;
-                    }
-                }
-
-                // Extend after the holiday
-                while (daysUsed < remainingDaysOff) {
-                    const nextDay = new Date(endDate);
-                    nextDay.setDate(endDate.getDate() + 1);
-                    if (!allDays.some(d => d.getTime() === nextDay.getTime()) && nextDay.getDay() !== 0 && nextDay.getDay() !== 6) {
-                        endDate = nextDay;
-                        daysUsed++;
-                    } else {
-                        break;
-                    }
-                }
-
-                remainingDaysOff -= daysUsed; // Deduct used days from remaining
-
-                // Calculate total consecutive days including weekends
-                const totalDays = calculateTotalConsecutiveDays(startDate, endDate, allDays);
-
-                return {
-                    holidayName: holiday.name,
-                    startDate: formatDate(startDate),
-                    endDate: formatDate(endDate),
-                    totalDays
-                };
-            });
-
-        // If there are remaining days off, try to use them to extend any holiday further
-        if (remainingDaysOff > 0) {
-            extendedHolidays.forEach(extended => {
-                let startDate = new Date(extended.startDate);
-                let endDate = new Date(extended.endDate);
-
-                // Extend before the holiday
-                while (remainingDaysOff > 0) {
-                    const prevDay = new Date(startDate);
-                    prevDay.setDate(startDate.getDate() - 1);
-                    if (!allDays.some(d => d.getTime() === prevDay.getTime()) && prevDay.getDay() !== 0 && prevDay.getDay() !== 6) {
-                        startDate = prevDay;
-                        remainingDaysOff--;
-                    } else {
-                        break;
-                    }
-                }
-
-                // Extend after the holiday
-                while (remainingDaysOff > 0) {
-                    const nextDay = new Date(endDate);
-                    nextDay.setDate(endDate.getDate() + 1);
-                    if (!allDays.some(d => d.getTime() === nextDay.getTime()) && nextDay.getDay() !== 0 && nextDay.getDay() !== 6) {
-                        endDate = nextDay;
-                        remainingDaysOff--;
-                    } else {
-                        break;
-                    }
-                }
-
-                extended.startDate = formatDate(startDate);
-                extended.endDate = formatDate(endDate);
-                extended.totalDays = calculateTotalConsecutiveDays(startDate, endDate, allDays);
-            });
-        }
-    }
-
-    function calculateTotalConsecutiveDays(startDate, endDate, allDays) {
-        let totalDays = 0;
-        let currentDate = new Date(startDate);
-
-        while (currentDate <= endDate) {
-            const isWeekend = currentDate.getDay() === 0 || currentDate.getDay() === 6;
-            const isHoliday = allDays.some(d => d.getTime() === currentDate.getTime());
-
-            if (isWeekend || isHoliday || optimizedDaysOff.some(d => d.getTime() === currentDate.getTime())) {
-                totalDays++;
-            }
-
-            currentDate.setDate(currentDate.getDate() + 1);
-        }
-
-        return totalDays;
-    }
-
-    // Initialize holidays on load
     updateHolidays();
 </script>
 
 <style>
-    header {
+
+    header, footer {
         text-align: center;
-        background-color: black;
-        padding: 20px;
-        color: white;
+        color: #e0e0e0; /* Monochrome light text */
+        padding: 15px;
+        border-bottom: 1px solid #333; /* Subtle border for separation */
+    }
+
+    h1 {
+        margin: 0;
         font-size: 2em;
-        font-family: 'Arial', sans-serif;
     }
-    main {
-        max-width: 800px;
+
+    footer {
+        border-top: 1px solid #333;
+        font-size: 0.9em;
+    }
+
+    .content-box {
+        max-width: 900px;
         margin: 20px auto;
-        padding: 20px;
-        background-color: #333; /* Dark gray for main background */
+        padding: 10px 0;
+        background-color: #1e1e1e; /* Slightly lighter dark background for content boxes */
         text-align: center;
-        font-size: 1.2em;
-        color: white; /* Ensure text is white for readability */
-        border-radius: 10px; /* Add border-radius for a smoother look */
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); /* Add shadow for depth */
+        font-size: 1em; /* Slightly smaller font size */
+        color: #e0e0e0; /* Light gray text */
+        border-radius: 10px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.7);
+        margin-bottom: 40px;
     }
-    select, input {
-        margin: 0 5px;
-        font-size: 1em;
-        padding: 5px;
-        background-color: #555; /* Darker background for inputs */
-        color: white; /* White text for inputs */
-        border: none;
+
+    input {
+        margin: 0 10px;
+        font-size: 0.9em; /* Slightly smaller font size */
+        padding: 8px;
+        background-color: #2a2a2a; /* Darker gray for inputs */
+        color: #e0e0e0; /* Light text for inputs */
+        border: 1px solid #444;
         border-radius: 5px;
+        transition: background-color 0.3s;
+        width: auto; /* Dynamic width based on content */
     }
+
+    input::hover {
+        background-color: #333; /* Slightly lighter on hover */
+    }
+
     ul {
-        list-style-type: none; /* Remove bullet points */
+        list-style-type: none;
         padding: 0;
     }
+
     li {
-        margin: 10px 0;
+        margin: 15px 0;
+        padding: 15px;
+        background-color: #2a2a2a;
+        border-radius: 5px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
     }
+
     .calendar-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); /* Adjust to fit available space */
-        gap: 10px;
+        grid-template-columns: repeat(3, 1fr); /* Default to 3 columns */
+        gap: 20px;
         justify-items: center;
         padding: 20px;
     }
-    .calendar-container {
-        width: 100%;
-        aspect-ratio: 1;
-        background-color: #444; /* Slightly lighter gray for calendar */
-        color: white;
-        border-radius: 5px;
-        padding: 10px;
-        box-sizing: border-box; /* Ensure padding is included in width */
-    }
 
-    /* Media query for smaller screens */
-    @media (max-width: 600px) {
+    @media (max-width: 768px) {
         .calendar-grid {
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); /* Adjust for smaller screens */
+            grid-template-columns: repeat(2, 1fr); /* 2 columns on smaller screens */
         }
     }
 
-    .editable-span {
-        display: inline-block;
-        border-bottom: 1px dotted white; /* Dotted underline */
-        color: white;
-        font-size: 1em;
-        width: 3em; /* Adjust width as needed */
+    .calendar-container {
+        width: 100%;
+        aspect-ratio: 1;
+        background-color: #2a2a2a; /* Dark gray for calendar */
+        color: #e0e0e0;
+        border-radius: 5px;
+        padding: 10px;
+        box-sizing: border-box;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+    }
+
+    .editable-input {
+        border: none;
+        border-bottom: 1px dotted #e0e0e0;
+        background: none;
+        color: inherit;
+        font-size: inherit;
+        font-family: inherit;
+        width: auto;
         text-align: center;
-        margin: 0 5px;
+        margin: 0 10px;
         outline: none;
     }
 
-    .editable-span:focus {
-        border-bottom: 1px solid white; /* Solid underline on focus */
+    .arrow-controls {
+        display: inline-flex;
+        align-items: center;
     }
 
-    .highlight {
-        background-color: #4caf50; /* Green color for highlighting */
-        color: white;
+    button {
+        background-color: #2a2a2a;
+        border: 1px solid #444;
+        color: #e0e0e0;
+        font-size: 1em; /* Slightly smaller font size */
+        cursor: pointer;
+        padding: 5px 10px;
+        margin: 0 10px;
+        border-radius: 5px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        transition: background-color 0.3s, color 0.3s, transform 0.1s;
+    }
+
+    button:hover {
+        background-color: #333;
+        color: #fff; /* Change color on hover */
+    }
+
+    button:active {
+        transform: translateY(2px); /* Simulate button press */
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    }
+
+    button:focus {
+        outline: 2px solid #61dafb; /* Accessibility focus outline */
+    }
+
+    .bold {
+        font-weight: bold;
+        font-size: 1.2em;
     }
 </style>
 
+<header>
+    <h1>Stretch My Holidays</h1>
+</header>
+
 <main>
-    I live in 
-    <input list="countries" bind:value={selectedCountry} on:change={handleCountryChange} />
-    <datalist id="countries">
-        {#each Object.values(countriesList) as name}
-            <option value={name}></option>
-        {/each}
-    </datalist>
-    and have 
-    <span contenteditable="true" class="editable-span" on:input={handleDaysOffInput} on:blur={handleDaysOffChange}>{daysOff}</span> days off per year
+    <div class="content-box">
+        <p>
+            I live in 
+            <input list="countries" class="editable-input bold" bind:value={selectedCountry} on:change={handleCountryChange} aria-label="Select country" />
+            and have 
+            <span class="arrow-controls">
+                <button on:click={() => { daysOff++; updateHolidays(); }} aria-label="Increase days off">▲</button>
+                <span class="bold">{daysOff}</span>&nbsp;days off
+                <button on:click={() => { if (daysOff > 0) { daysOff--; updateHolidays(); } }} aria-label="Decrease days off">▼</button>
+            </span> in 
+            <span class="arrow-controls">
+                <button on:click={() => { year--; updateHolidays(); }} aria-label="Previous year">◀</button>
+                <span class="bold">{year}</span>
+                <button on:click={() => { year++; updateHolidays(); }} aria-label="Next year">▶</button>
+            </span>
+        </p>
 
-    <div>
-        <label for="year">Select Year: </label>
-        <input type="number" id="year" bind:value={year} on:input={handleYearChange} min="1900" max="2100" />
-    </div>
-
-    <div>
-        Extended Holidays:
-        <ul>
-            {#each extendedHolidays as extended}
-                <li>
-                    {extended.totalDays} day holiday, including {extended.holidayName} from {extended.startDate} to {extended.endDate}
-                </li>
+        <datalist id="countries">
+            {#each Object.values(countriesList) as name}
+                <option value={name}></option>
             {/each}
-        </ul>
+        </datalist>
     </div>
 
-    <div class="calendar-grid">
-        {#each months as month}
-            <div class="calendar-container">
-                <CalendarMonth {year} {month} {holidays} {optimizedDaysOff} />
-            </div>
-        {/each}
+    <div class="content-box">
+        <div class="calendar-grid">
+            {#each months as month}
+                <div class="calendar-container">
+                    <CalendarMonth {year} {month} {holidays} {optimizedDaysOff} />
+                </div>
+            {/each}
+        </div>
     </div>
-</main> 
+</main>
+
+<footer>
+    <p>© 2023 Stretch My Holidays. All rights reserved.</p>
+</footer> 

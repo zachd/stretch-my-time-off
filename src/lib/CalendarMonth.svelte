@@ -6,6 +6,10 @@
     export let holidays = [];
     export let optimizedDaysOff = [];
 
+    // Reactive declarations
+    $: daysInMonth = getDaysInMonth(year, month);
+    $: firstDay = getFirstDayOfMonth(year, month);
+
     function getDaysInMonth(year, month) {
         return new Date(year, month + 1, 0).getDate();
     }
@@ -13,9 +17,6 @@
     function getFirstDayOfMonth(year, month) {
         return new Date(year, month, 1).getDay();
     }
-
-    let daysInMonth = getDaysInMonth(year, month);
-    let firstDay = getFirstDayOfMonth(year, month);
 
     function getHoliday(day) {
         return holidays.find(holiday => 

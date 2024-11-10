@@ -5,8 +5,20 @@
 		<link rel="icon" href="%sveltekit.assets%/favicon.png" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		%sveltekit.head%
+		<style>
+    		@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap');
+		
+			body {
+				font-family: 'Poppins', sans-serif; /* Modern, cooler font */
+				background-color: #121212; /* Dark background */
+				color: #e0e0e0; /* Light gray text for readability */
+				margin: 0;
+				padding: 0;
+				line-height: 1.6;
+			}
+		</style>
 	</head>
-	<body style="margin: 0; font-family: Arial, sans-serif; background-color: black; color: white;">
+	<body>
 		<div style="display: contents">%sveltekit.body%</div>
 	</body>
 </html>
