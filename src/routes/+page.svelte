@@ -52,10 +52,6 @@
             optimizedDaysOff = [];
             consecutiveDaysOff = [];
         }
-        console.log('Year:', year);
-        console.log('Holidays updated:', holidays);
-        console.log('Optimized Days Off:', optimizedDaysOff);
-        console.log('Consecutive Days Off:', consecutiveDaysOff);
     }
 
     function getFlagEmoji(countryCode) {
@@ -105,29 +101,29 @@
     });
 
     updateHolidays();
-    console.log(consecutiveDaysOff);
 </script>
 
 <style>
     .header {
         max-width: 800px;
-        margin: 40px auto;
+        margin: 20px auto;
+        padding: 0 10px;
         text-align: center;
     }
 
     .header h2 {
-        font-size: 2.5em; /* Slightly larger font size */
+        font-size: 2em;
         margin: 0;
     }
 
     .header p {
-        font-size: 1.1em;
+        font-size: 1em;
     }
 
     .content-box {
         max-width: 1200px;
-        margin: 40px auto;
-        padding: 20px;
+        margin: 20px auto;
+        padding: 15px;
         background-color: #111;
         border-radius: 8px;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
@@ -139,7 +135,7 @@
     }
 
     input {
-        margin: 0 10px;
+        margin: 0 5px;
         font-size: 1em;
         padding: 8px;
         background-color: transparent;
@@ -160,7 +156,7 @@
 
     .calendar-grid {
         display: grid;
-        grid-template-columns: repeat(3, 1fr); /* Default to 3 columns */
+        grid-template-columns: repeat(3, 1fr);
         gap: 20px;
         justify-items: center;
         padding: 20px;
@@ -168,7 +164,7 @@
 
     @media (max-width: 1024px) {
         .calendar-grid {
-            grid-template-columns: repeat(2, 1fr); /* Adjust to 2 columns for medium screens */
+            grid-template-columns: repeat(2, 1fr);
             gap: 10px;
             padding: 10px;
         }
@@ -182,19 +178,13 @@
         }
     }
 
-    @media (max-width: 400px) {
-        .calendar-grid {
-            grid-template-columns: repeat(1, 1fr); /* Adjust to 1 column for very small screens */
-        }
-    }
-
     .calendar-container {
         width: 100%;
         max-width: 300px;
         background-color: #111;
         color: #fff;
         border-radius: 5px;
-        padding: 15px;
+        padding: 10px;
         box-sizing: border-box;
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         overflow: visible;
@@ -206,26 +196,27 @@
         display: flex;
         justify-content: center;
         align-items: center;
-        padding: 10px;
+        padding: 5px;
         border-radius: 5px;
-        margin-bottom: 20px;
+        margin-bottom: 10px;
     }
 
     .key-item {
         display: flex;
         align-items: center;
-        margin: 0 15px;
+        margin: 0 10px;
+        font-size: 0.8em;
     }
 
     .color-box {
-        width: 20px;
-        height: 20px;
-        margin-right: 8px;
+        width: 15px;
+        height: 15px;
+        margin-right: 5px;
         border-radius: 3px;
     }
 
     .color-box.weekend {
-        background-color: #585858; /* Muted gray/white */
+        background-color: #585858;
     }
 
     .color-box.optimized {
@@ -238,9 +229,9 @@
 
     footer {
         text-align: center;
-        padding: 20px;
+        padding: 10px;
         color: #c5c6c7;
-        font-size: 0.9em;
+        font-size: 0.8em;
     }
 
     footer a {
@@ -259,15 +250,24 @@
 
     button {
         background-color: #333;
-        border: 1px solid #444;
+        border-left: 4px solid #111;
+        border-top: 4px solid #111;
+        border-right: 4px solid #555;
+        border-bottom: 4px solid #555;
         color: #fff;
-        font-size: 1em;
+        font-size: 0.8em;
         cursor: pointer;
-        padding: 5px 10px;
-        margin: 0 10px;
-        border-radius: 5px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.1);
-        transition: background-color 0.3s, color 0.3s, transform 0.1s;
+        padding: 3px;
+        margin: 0 5px;
+        border-radius: 4px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        transition: transform 0.1s;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 30px;
+        height: 30px;
+        font-weight: bold;
     }
 
     button:hover {
@@ -276,26 +276,26 @@
 
     button:active {
         transform: translateY(2px);
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        box-shadow: none;
     }
 
     button:focus {
-        outline: 2px solid #61dafb;
+        outline: none;
     }
 
     .bold {
         font-weight: bold;
-        font-size: 1.2em;
+        font-size: 1em;
     }
 
     .flag {
-        font-size: 2em;
+        font-size: 1.5em;
     }
 
     .day {
         aspect-ratio: 1;
         text-align: center;
-        font-size: 0.7em; /* Adjust font size for smaller screens */
+        font-size: 0.6em;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -311,7 +311,7 @@
         <p>
             In {selectedCountry}, there are {holidays.length} public holidays in {year}. 
             <br />
-            Let's stretch your {daysOff} days off to {consecutiveDaysOff.reduce((total, group) => total + group.totalDays, 0)} vacation days.
+            Let's stretch your time off from {daysOff} days to {consecutiveDaysOff.reduce((total, group) => total + group.totalDays, 0)} days.
         </p>
     </div>
 
@@ -322,14 +322,14 @@
             <input bind:this={inputElement} list="countries" class="editable-input bold" bind:value={selectedCountry} placeholder={placeholder} on:input={handleCountryChange} on:focus={() => { inputElement.value = ''; adjustInputWidth(); }} aria-label="Select country" />
             and have 
             <span class="arrow-controls">
-                <button on:click={() => { daysOff++; updateHolidays(); }} aria-label="Increase days off">▲</button>
-                <span class="bold">{daysOff}</span>&nbsp;days off
                 <button on:click={() => { if (daysOff > 0) { daysOff--; updateHolidays(); } }} aria-label="Decrease days off">▼</button>
-            </span> in 
+                <span class="bold">{daysOff} days</span>
+                <button on:click={() => { daysOff++; updateHolidays(); }} aria-label="Increase days off">▲</button>
+            </span>of vacation in
             <span class="arrow-controls">
-                <button on:click={() => { year--; updateHolidays(); }} aria-label="Previous year">◀</button>
+                <button on:click={() => { year--; updateHolidays(); }} aria-label="Previous year">▼</button>
                 <span class="bold">{year}</span>
-                <button on:click={() => { year++; updateHolidays(); }} aria-label="Next year">▶</button>
+                <button on:click={() => { year++; updateHolidays(); }} aria-label="Next year">▲</button>
             </span>
         </p>
 
