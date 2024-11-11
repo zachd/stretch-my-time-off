@@ -25,9 +25,9 @@
 
     let year = new Date().getFullYear();
     let months = Array.from({ length: 12 }, (_, i) => i);
-    let selectedCountry = countriesList[countryCode] || 'Belgium';
+    let selectedCountry = countriesList[countryCode] || 'Ireland';
     let holidays = [];
-    let daysOff = ptoData[countryCode] || ptoData['BE'];
+    let daysOff = ptoData[countryCode] || ptoData['IE'];
     let optimizedDaysOff = [];
     let consecutiveDaysOff = [];
     let placeholder = "Country";
