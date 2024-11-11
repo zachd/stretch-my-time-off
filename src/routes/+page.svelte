@@ -473,19 +473,19 @@
     <div id="how-it-works" class="content-box how-it-works">
         <h3>How does this work?</h3>
         <p>
-            The app uses your country to fetch public holiday data. The algorithm analyzes these holidays and weekends to identify gaps that can be optimized. It ranks these gaps based on their potential to be filled with personal leave days. 
+            This tool detects your country from your IP, uses a default number of government-mandated days off from Wikipedia, and a database of holidays for your country.
         </p>
         <p>
-            By strategically selecting the most efficient gaps, it calculates the longest possible sequences of consecutive days off. This approach maximizes your vacation time by aligning personal leave with public holidays, ensuring you make the most of your available days.
+            The algorithm prioritizes filling the shortest gaps first. It optimizes for spreading your holidays throughout the year to create the most number of consecutive vacation periods.
         </p>
         <p>
-            Built with <a href="https://kit.svelte.dev/" target="_blank">SvelteKit</a>, this tool uses JavaScript and CSS for responsiveness. Hosted on <a href="https://vercel.com/" target="_blank">Vercel</a> with <a href="https://www.cloudflare.com/" target="_blank">Cloudflare</a> for CDN and security, it was developed using AI tools like GPT-4o.
+            Built with <a href="https://kit.svelte.dev/" target="_blank" rel="noopener noreferrer">SvelteKit</a>. Hosted on <a href="https://vercel.com/" target="_blank" rel="noopener noreferrer">Vercel</a> with <a href="https://www.cloudflare.com/" target="_blank" rel="noopener noreferrer">Cloudflare</a>. Developed using <a href="https://www.cursor.com/" target="_blank" rel="noopener noreferrer">Cursor</a>, an AI-powered code editor, and <a href="https://openai.com/research/gpt-4" target="_blank" rel="noopener noreferrer">GPT-4o</a>.
         </p>
     </div>
     {/if}
 </main>
 
 <footer>
-    <p>Made with <span style="color: red;">📅</span> by <a href="https://zach.ie" target="_blank">Zach</a></p>
-    <p><a href="https://github.com/zachd/stretch-my-time-off" target="_blank">View on GitHub</a></p>
+    <p>Made with ☕ by <a href="https://zach.ie" target="_blank">Zach</a> (+ GPT-4o)</p>
+    <p><a href="https://github.com/zachd/stretch-my-time-off" target="_blank" rel="noopener noreferrer">View on GitHub</a></p>
 </footer> 
