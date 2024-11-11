@@ -69,6 +69,7 @@
     }
 
     function getFlagEmoji(countryCode) {
+        if (!countryCode) return ''; // Return an empty string if countryCode is not available
         return countryCode
             .toUpperCase()
             .replace(/./g, char => String.fromCodePoint(127397 + char.charCodeAt()));
