@@ -11,9 +11,9 @@
 
     let year = new Date().getFullYear();
     let months = Array.from({ length: 12 }, (_, i) => i);
-    let selectedCountry = 'Belgium';
+    let selectedCountry = '';
     let holidays = [];
-    let daysOff = ptoData['BE'];
+    let daysOff = 0;
     let optimizedDaysOff = [];
     let consecutiveDaysOff = [];
     let placeholder = "Country";
@@ -25,8 +25,8 @@
             const text = await response.text();
             const countryCodeMatch = text.match(/cf-ipcountry=(\w+)/);
             const countryCode = countryCodeMatch ? countryCodeMatch[1] : 'BE';
-            selectedCountry = countriesList[countryCode] || 'Belgium';
-            daysOff = ptoData[countryCode] || ptoData['BE'];
+            selectedCountry = countriesList[countryCode] || '';
+            daysOff = ptoData[countryCode] || 0;
             updateHolidays();
         } catch (error) {
             console.error('Error fetching country code:', error);
