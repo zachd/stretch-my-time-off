@@ -41,20 +41,51 @@ export function getHolidaysForYear(countryCode, year) {
 
 // Optimize days off to create the longest possible chains
 export function optimizeDaysOff(holidays, year, daysOff) {
+    // Filter holidays to include only those in the current year
+    const currentYearHolidays = holidays.filter(h => h.date.getFullYear() === year);
+
+    // Recalculate weekends for the current year
     const weekends = getWeekends(year);
-    const allDaysOffSet = new Set([...holidays.map(h => dateKey(h.date)), ...weekends.map(d => dateKey(d))]);
+
+    // Initialize a new Set for all days off
+    const allDaysOffSet = new Set([
+        ...currentYearHolidays.map(h => dateKey(h.date)),
+        ...weekends.map(d => dateKey(d))
+    ]);
 
     let rankedGaps = rankGapsByEfficiency(findGaps(allDaysOffSet, year), allDaysOffSet);
 
-    return selectDaysOff(rankedGaps, daysOff, allDaysOffSet);
+    return selectDaysOff(rankedGaps, daysOff, allDaysOffSet, year);
 }
 
 // Calculate consecutive days off
 export function calculateConsecutiveDaysOff(holidays, optimizedDaysOff, year) {
-    const allDays = [...holidays.map(h => h.date), ...optimizedDaysOff];
-    allDays.sort((a, b) => a - b);
+    const allDaysOffSet = new Set([...holidays.map(h => dateKey(h.date)), ...optimizedDaysOff.map(d => dateKey(d))]);
+    const consecutiveDaysOff = [];
+    let currentGroup = [];
+    
+    for (let month = 0; month < 12; month++) {
+        for (let day = 1; day <= 31; day++) {
+            const date = new Date(year, month, day);
+            if (date.getMonth() !== month) break; // Skip invalid dates
 
-    return findConsecutiveDaysOff(allDays, holidays, optimizedDaysOff);
+            if (isWeekend(date) || isHoliday(date, holidays) || isDayOff(date, allDaysOffSet)) {
+                currentGroup.push(date);
+            } else {
+                if (currentGroup.length > 2) {
+                    addConsecutiveDaysOff(consecutiveDaysOff, currentGroup, optimizedDaysOff);
+                }
+                currentGroup = [];
+            }
+        }
+    }
+
+    // Check the last group at the end of the year
+    if (currentGroup.length > 2) {
+        addConsecutiveDaysOff(consecutiveDaysOff, currentGroup, optimizedDaysOff);
+    }
+
+    return consecutiveDaysOff;
 }
 
 // Get all weekends for a specific year
@@ -143,7 +174,7 @@ function calculateChain(startDate, gapLength, allDaysOffSet, direction) {
 }
 
 // Select days off based on ranked gaps
-function selectDaysOff(rankedGaps, daysOff, allDaysOffSet) {
+function selectDaysOff(rankedGaps, daysOff, allDaysOffSet, year) {
     const selectedDays = [];
 
     while (daysOff > 0 && rankedGaps.length > 0) {
@@ -165,51 +196,26 @@ function selectDaysOff(rankedGaps, daysOff, allDaysOffSet) {
         }
 
         // Recalculate gaps and re-rank them after each assignment
-        const newGaps = findGaps(allDaysOffSet, new Date().getFullYear());
+        const newGaps = findGaps(allDaysOffSet, year);
         rankedGaps = rankGapsByEfficiency(newGaps, allDaysOffSet);
     }
 
     return selectedDays;
 }
 
-// Find consecutive days off
-function findConsecutiveDaysOff(allDays, holidays, optimizedDaysOff) {
-    let consecutiveDaysOff = [];
-    let currentGroup = [];
-    let includesHoliday = false;
-
-    allDays.forEach(date => {
-        if (isWeekend(date) || isHoliday(date, holidays) || isDayOff(date, new Set(optimizedDaysOff.map(d => dateKey(d))))) {
-            currentGroup.push(date);
-            if (isHoliday(date, holidays)) includesHoliday = true;
-        } else if (currentGroup.length > 0) {
-            addConsecutiveDaysOff(consecutiveDaysOff, currentGroup, optimizedDaysOff, includesHoliday);
-            currentGroup = [];
-            includesHoliday = false;
-        }
-    });
-
-    if (currentGroup.length > 0) {
-        addConsecutiveDaysOff(consecutiveDaysOff, currentGroup, optimizedDaysOff, includesHoliday);
-    }
-
-    return consecutiveDaysOff;
-}
-
 // Add consecutive days off to the list
-function addConsecutiveDaysOff(consecutiveDaysOff, currentGroup, optimizedDaysOff, includesHoliday) {
-    if (currentGroup.some(d => isDayOff(d, new Set(optimizedDaysOff.map(d => dateKey(d)))))) {
-        const startDate = currentGroup[0];
-        const endDate = currentGroup[currentGroup.length - 1];
-        const totalDays = daysBetween(startDate, endDate) + 1;
-        const usedDaysOff = currentGroup.filter(d => isDayOff(d, new Set(optimizedDaysOff.map(d => dateKey(d))))).length;
-        const message = `${usedDaysOff} days off -> ${totalDays} days`;
+function addConsecutiveDaysOff(consecutiveDaysOff, currentGroup, optimizedDaysOff) {
+    const startDate = currentGroup[0];
+    const endDate = currentGroup[currentGroup.length - 1];
+    const totalDays = daysBetween(startDate, endDate) + 1;
+    const usedDaysOff = currentGroup.filter(d => isDayOff(d, new Set(optimizedDaysOff.map(d => dateKey(d))))).length;
 
+    if (totalDays > 2) {
         consecutiveDaysOff.push({
-            startDate: formatDate(startDate),
-            endDate: formatDate(endDate),
-            includesHoliday,
-            message
+            startDate,
+            endDate,
+            usedDaysOff,
+            totalDays
         });
     }
 }

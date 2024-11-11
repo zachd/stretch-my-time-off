@@ -9,7 +9,7 @@
         color: #fff;
         padding: 5px;
         border-radius: 3px;
-        font-size: 0.8em;
+        font-size: 1.2em;
         white-space: nowrap;
         z-index: 1000;
         pointer-events: none;

@@ -5,6 +5,7 @@
     export let month;
     export let holidays = [];
     export let optimizedDaysOff = [];
+    export let consecutiveDaysOff = [];
 
     // Reactive declarations
     $: daysInMonth = getDaysInMonth(year, month);
@@ -33,16 +34,55 @@
             date.getDate() === day
         );
     }
+
+    // Determine the dominant month for each consecutive days off period
+    function getDominantMonth(period) {
+        const startMonth = period.startDate.getMonth();
+        const endMonth = period.endDate.getMonth();
+
+        if (startMonth === endMonth) {
+            return startMonth;
+        }
+
+        const startDays = getDaysInMonth(year, startMonth) - period.startDate.getDate() + 1;
+        const endDays = period.endDate.getDate();
+
+        return startDays > endDays ? startMonth : endMonth;
+    }
 </script>
+
+<div class="calendar">
+    <div class="month-name">{new Date(year, month).toLocaleString('default', { month: 'long' })}</div>
+    {#each Array.from({ length: firstDay }) as _}
+        <div class="day"></div>
+    {/each}
+    {#each Array.from({ length: daysInMonth }, (_, i) => i + 1) as day}
+        <div class="day {(firstDay + day - 1) % 7 === 0 || (firstDay + day - 1) % 7 === 6 ? 'weekend' : ''} {getHoliday(day) ? 'holiday' : ''} {isOptimizedDayOff(day) ? 'optimized' : ''}">
+            {day}
+            {#if getHoliday(day)}
+                <Tooltip text={getHoliday(day).name} />
+            {/if}
+        </div>
+    {/each}
+</div>
+
+<div class="consecutive-days-off">
+    <ul>
+        {#each consecutiveDaysOff.filter(period => getDominantMonth(period) === month) as period}
+            <li>
+                {period.startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} to 
+                {period.endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}: 
+                <strong>{period.totalDays} days</strong>
+            </li>
+        {/each}
+    </ul>
+</div>
 
 <style>
     .calendar {
         display: grid;
         grid-template-columns: repeat(7, 1fr);
         gap: 1px;
-        border: 1px solid #444;
-        padding: 5px;
-        margin: 5px;
         box-sizing: border-box;
         width: 100%;
         height: auto;
@@ -58,7 +98,6 @@
         background-color: #222;
         position: relative;
     }
-    
     .day:hover {
         :global(.tooltip) {
             opacity: 1;
@@ -66,37 +105,34 @@
         }
     }
     .weekend {
-        background-color: #333;
+        background-color: #585858;
+    }
+    .optimized {
+        background-color: #4caf50;
     }
     .holiday {
         background-color: #3b1e6e;
         cursor: pointer;
     }
-    .optimized {
-        background-color: #4caf50;
-        color: white;
-    }
     .month-name {
         grid-column: span 7;
         text-align: center;
-        font-weight: bold;
-        font-size: 0.8em;
-        margin-bottom: 2px;
+        letter-spacing: 0.1em;
+        font-size: 0.9em;
+        text-transform: uppercase;
+        color: #c5c6c7;
+        margin-bottom: 5px;
+    }
+    .consecutive-days-off {
+        margin-top: 10px;
         color: #fff;
     }
-</style>
-
-<div class="calendar">
-    <div class="month-name">{new Date(year, month).toLocaleString('default', { month: 'long' })}</div>
-    {#each Array.from({ length: firstDay }) as _}
-        <div class="day"></div>
-    {/each}
-    {#each Array.from({ length: daysInMonth }, (_, i) => i + 1) as day}
-        <div class="day {(firstDay + day - 1) % 7 === 0 || (firstDay + day - 1) % 7 === 6 ? 'weekend' : ''} {getHoliday(day) ? 'holiday' : ''} {isOptimizedDayOff(day) ? 'optimized' : ''}">
-            {day}
-            {#if getHoliday(day)}
-                <Tooltip text={getHoliday(day).name} />
-            {/if}
-        </div>
-    {/each}
-</div> 
+    .consecutive-days-off ul {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+    .consecutive-days-off li {
+        font-size: 0.9em;
+    }
+</style> 
