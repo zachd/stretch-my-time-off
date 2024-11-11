@@ -1,5 +1,6 @@
 <script>
     import { onMount } from 'svelte';
+    import { injectSpeedInsights } from '@vercel/speed-insights';
     import countries from 'i18n-iso-countries';
     import enLocale from 'i18n-iso-countries/langs/en.json';
     import CalendarMonth from '../lib/CalendarMonth.svelte';
@@ -20,33 +21,52 @@
     let inputElement;
     let showHowItWorks = false;
 
-    // Load settings from local storage
     onMount(() => {
-        if (typeof window !== 'undefined') { // Check if running in the browser
-            const storedYear = localStorage.getItem('year');
-            const storedCountry = localStorage.getItem('selectedCountry');
-            const storedDaysOff = localStorage.getItem('daysOff');
+        injectSpeedInsights();
 
-            if (storedYear) year = parseInt(storedYear);
-            if (storedCountry) selectedCountry = storedCountry;
-            if (storedDaysOff) daysOff = parseInt(storedDaysOff);
+        const storedYear = localStorage.getItem('year');
+        const storedCountry = localStorage.getItem('selectedCountry');
+        const storedDaysOff = localStorage.getItem('daysOff');
 
-            // Ensure holidays are updated after loading settings
-            updateHolidays();
+        year = storedYear ? parseInt(storedYear, 10) : new Date().getFullYear();
+        selectedCountry = storedCountry || '';
+        daysOff = storedDaysOff ? parseInt(storedDaysOff, 10) : 0;
 
-            fetchCountryCode();
-            adjustInputWidth(inputElement);
-            inputElement.addEventListener('input', () => {
-                adjustInputWidth(inputElement);
-                const countryCode = Object.keys(countriesList).find(code => countriesList[code] === inputElement.value);
+        if (!storedYear || !storedCountry || !storedDaysOff) {
+            // First load: detect country and save initial settings
+            fetchCountryCode().then(() => {
+                localStorage.setItem('year', year);
+                localStorage.setItem('selectedCountry', selectedCountry);
+                localStorage.setItem('daysOff', daysOff);
             });
-            inputElement.addEventListener('focus', () => {
-                inputElement.value = '';
-                adjustInputWidth(inputElement);
-            });
-            window.addEventListener('keydown', handleKeyDown);
         }
+
+        updateHolidays();
+        adjustInputWidth(inputElement);
+        inputElement.addEventListener('input', () => {
+            adjustInputWidth(inputElement);
+            const countryCode = Object.keys(countriesList).find(code => countriesList[code] === inputElement.value);
+        });
+        inputElement.addEventListener('focus', () => {
+            inputElement.value = '';
+            adjustInputWidth(inputElement);
+        });
+        window.addEventListener('keydown', handleKeyDown);
     });
+
+    async function fetchCountryCode() {
+        try {
+            const response = await fetch('/cdn-cgi/trace');
+            const text = await response.text();
+            const countryCodeMatch = text.match(/cf-ipcountry=(\w+)/);
+            const countryCode = countryCodeMatch ? countryCodeMatch[1] : 'BE';
+            selectedCountry = countriesList[countryCode] || '';
+            daysOff = ptoData[countryCode] || 0;
+            updateHolidays();
+        } catch (error) {
+            console.error('Error fetching country code:', error);
+        }
+    }
 
     function handleCountryChange(event) {
         const fullValue = event.target.value;
@@ -55,10 +75,8 @@
             selectedCountry = fullValue;
             daysOff = ptoData[countryCode] || 0;
             updateHolidays();
-            if (typeof window !== 'undefined') { // Check if running in the browser
-                localStorage.setItem('selectedCountry', selectedCountry); // Save to local storage
-                localStorage.setItem('daysOff', daysOff); // Save to local storage
-            }
+            localStorage.setItem('selectedCountry', selectedCountry);
+            localStorage.setItem('daysOff', daysOff);
         }
         adjustInputWidth(event.target);
     }
@@ -74,10 +92,8 @@
             optimizedDaysOff = [];
             consecutiveDaysOff = [];
         }
-        if (typeof window !== 'undefined') { // Check if running in the browser
-            localStorage.setItem('year', year); // Save to local storage
-            localStorage.setItem('daysOff', daysOff); // Save to local storage
-        }
+        localStorage.setItem('year', year);
+        localStorage.setItem('daysOff', daysOff);
     }
 
     function handleKeyDown(event) {
@@ -104,20 +120,6 @@
                     updateHolidays();
                 }
                 break;
-        }
-    }
-
-    async function fetchCountryCode() {
-        try {
-            const response = await fetch('/cdn-cgi/trace');
-            const text = await response.text();
-            const countryCodeMatch = text.match(/cf-ipcountry=(\w+)/);
-            const countryCode = countryCodeMatch ? countryCodeMatch[1] : 'BE';
-            selectedCountry = countriesList[countryCode] || '';
-            daysOff = ptoData[countryCode] || 0;
-            updateHolidays();
-        } catch (error) {
-            console.error('Error fetching country code:', error);
         }
     }
 
@@ -148,8 +150,6 @@
             }
         }
     }
-
-    updateHolidays();
 </script>
 
 <style>
