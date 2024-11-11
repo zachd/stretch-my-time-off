@@ -407,9 +407,9 @@
 
 <main>
     <div class="header">
-        <h2>Stretch My Time Off</h2>
+        <h2>🌴 Stretch My Time Off</h2>
         <p>
-            In <strong>{selectedCountry}</strong>, there are <strong>{holidays.length}</strong> public holidays in <strong>{year}</strong>. 
+            In <strong>{getFlagEmoji(Object.keys(countriesList).find(code => countriesList[code] === selectedCountry))} {selectedCountry}</strong>, there are <strong>{holidays.length}</strong> public holidays in <strong>{year}</strong>. 
             <br />
             Let's stretch your time off from <strong>{daysOff} days</strong> to <strong>{consecutiveDaysOff.reduce((total, group) => total + group.totalDays, 0)} days</strong> (<a href="#how-it-works" on:click={toggleHowItWorks}>how?</a>)
         </p>
