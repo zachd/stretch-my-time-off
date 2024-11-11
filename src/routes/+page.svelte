@@ -51,7 +51,7 @@
         tempSpan.style.whiteSpace = 'nowrap';
         tempSpan.textContent = inputElement.value || inputElement.placeholder;
         document.body.appendChild(tempSpan);
-        inputElement.style.width = `${tempSpan.offsetWidth + 50}px`;
+        inputElement.style.width = `${tempSpan.offsetWidth + 30}px`;
         document.body.removeChild(tempSpan);
     }
 
@@ -303,6 +303,7 @@
     .bold {
         font-weight: bold;
         font-size: 1em;
+        margin: 0 5px;
     }
 
     .flag {
@@ -342,7 +343,9 @@
                 <button on:click={() => { if (daysOff > 0) { daysOff--; updateHolidays(); } }} aria-label="Decrease days off">▼</button>
                 <span class="bold">{daysOff}</span>
                 <button on:click={() => { daysOff++; updateHolidays(); }} aria-label="Increase days off">▲</button>
-            </span>days&nbsp;off in<span class="arrow-controls">
+            </span>
+            days&nbsp;off in
+            <span class="arrow-controls">
                 <button on:click={() => { year--; updateHolidays(); }} aria-label="Previous year">◀</button>
                 <span class="bold">{year}</span>
                 <button on:click={() => { year++; updateHolidays(); }} aria-label="Next year">▶</button>
