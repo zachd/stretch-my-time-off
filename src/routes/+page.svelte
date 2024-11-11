@@ -1,3 +1,15 @@
+<script context="module">
+    export async function load({ request }) {
+        // Access the CF-IPCountry header
+        const countryCode = request.headers.get('cf-ipcountry') || 'IE';
+        return {
+            props: {
+                countryCode
+            }
+        };
+    }
+</script>
+
 <script>
     import { onMount } from 'svelte';
     import countries from 'i18n-iso-countries';
@@ -6,26 +18,20 @@
     import { getHolidaysForYear, optimizeDaysOff, calculateConsecutiveDaysOff } from '../lib/holidayUtils.js';
     import { ptoData } from '../lib/ptoData.js';
 
+    export let countryCode; // Receive the country code as a prop
+
     countries.registerLocale(enLocale);
     let countriesList = countries.getNames('en');
 
     let year = new Date().getFullYear();
     let months = Array.from({ length: 12 }, (_, i) => i);
-    let selectedCountry = 'Belgium';
+    let selectedCountry = countriesList[countryCode] || 'Belgium';
     let holidays = [];
-    let daysOff = ptoData['BE'];
+    let daysOff = ptoData[countryCode] || ptoData['BE'];
     let optimizedDaysOff = [];
     let consecutiveDaysOff = [];
     let placeholder = "Country";
     let inputElement;
-
-    // Function to set the default country based on Cloudflare IP
-    function setDefaultCountry() {
-        const countryCode = window?.CF_IPCountry || 'BE'; // Use Cloudflare's IP country or default to 'BE'
-        selectedCountry = countriesList[countryCode] || 'Belgium';
-        daysOff = ptoData[countryCode] || ptoData['BE'];
-        updateHolidays();
-    }
 
     function handleCountryChange(event) {
         const fullValue = event.target.value;
@@ -96,7 +102,6 @@
     }
 
     onMount(() => {
-        setDefaultCountry(); // Set the default country on mount
         adjustInputWidth(inputElement);
         inputElement.addEventListener('input', () => {
             adjustInputWidth(inputElement);
