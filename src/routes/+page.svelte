@@ -31,6 +31,9 @@
             if (storedCountry) selectedCountry = storedCountry;
             if (storedDaysOff) daysOff = parseInt(storedDaysOff);
 
+            // Ensure holidays are updated after loading settings
+            updateHolidays();
+
             fetchCountryCode();
             adjustInputWidth(inputElement);
             inputElement.addEventListener('input', () => {
@@ -73,6 +76,7 @@
         }
         if (typeof window !== 'undefined') { // Check if running in the browser
             localStorage.setItem('year', year); // Save to local storage
+            localStorage.setItem('daysOff', daysOff); // Save to local storage
         }
     }
 
