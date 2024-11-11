@@ -19,6 +19,14 @@
     let placeholder = "Country";
     let inputElement;
 
+    // Function to set the default country based on Cloudflare IP
+    function setDefaultCountry() {
+        const countryCode = window?.CF_IPCountry || 'BE'; // Use Cloudflare's IP country or default to 'BE'
+        selectedCountry = countriesList[countryCode] || 'Belgium';
+        daysOff = ptoData[countryCode] || ptoData['BE'];
+        updateHolidays();
+    }
+
     function handleCountryChange(event) {
         const fullValue = event.target.value;
         const countryCode = Object.keys(countriesList).find(code => countriesList[code] === fullValue);
@@ -88,6 +96,7 @@
     }
 
     onMount(() => {
+        setDefaultCountry(); // Set the default country on mount
         adjustInputWidth(inputElement);
         inputElement.addEventListener('input', () => {
             adjustInputWidth(inputElement);
@@ -251,23 +260,23 @@
 
     button {
         background-color: #333;
-        border-left: 4px solid #111;
-        border-top: 4px solid #111;
-        border-right: 4px solid #555;
-        border-bottom: 4px solid #555;
+        border-left: 4px solid #111; /* Lighter border on the left */
+        border-top: 4px solid #111; /* Lighter border on the top */
+        border-right: 4px solid #555; /* Darker border on the right */
+        border-bottom: 4px solid #555; /* Darker border on the bottom */
         color: #fff;
-        font-size: 0.8em;
+        font-size: 0.8em; /* Smaller font size */
         cursor: pointer;
-        padding: 2px;
-        margin: 0 5px;
-        border-radius: 4px;
+        padding: 3px; /* Reduced padding */
+        margin: 0 3px; /* Reduced margin */
+        border-radius: 4px; /* Slightly less rounded edges */
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
         transition: transform 0.1s;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width: 28px;
-        height: 28px;
+        width: 30px; /* Smaller width */
+        height: 30px; /* Smaller height */
         font-weight: bold;
     }
 
@@ -327,9 +336,9 @@
                 <span class="bold">{daysOff}</span>
                 <button on:click={() => { daysOff++; updateHolidays(); }} aria-label="Increase days off">▲</button>
             </span>days&nbsp;off in<span class="arrow-controls">
-                <button on:click={() => { year--; updateHolidays(); }} aria-label="Previous year">▼</button>
+                <button on:click={() => { year--; updateHolidays(); }} aria-label="Previous year">◀</button>
                 <span class="bold">{year}</span>
-                <button on:click={() => { year++; updateHolidays(); }} aria-label="Next year">▲</button>
+                <button on:click={() => { year++; updateHolidays(); }} aria-label="Next year">▶</button>
             </span>
         </p>
 
