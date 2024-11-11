@@ -1,15 +1,3 @@
-<script context="module">
-    export async function load({ request }) {
-        // Access the CF-IPCountry header
-        const countryCode = request.headers.get('cf-ipcountry') || 'IE';
-        return {
-            props: {
-                countryCode
-            }
-        };
-    }
-</script>
-
 <script>
     import { onMount } from 'svelte';
     import countries from 'i18n-iso-countries';
@@ -18,20 +6,32 @@
     import { getHolidaysForYear, optimizeDaysOff, calculateConsecutiveDaysOff } from '../lib/holidayUtils.js';
     import { ptoData } from '../lib/ptoData.js';
 
-    export let countryCode; // Receive the country code as a prop
-
     countries.registerLocale(enLocale);
     let countriesList = countries.getNames('en');
 
     let year = new Date().getFullYear();
     let months = Array.from({ length: 12 }, (_, i) => i);
-    let selectedCountry = countriesList[countryCode] || 'Ireland';
+    let selectedCountry = 'Belgium';
     let holidays = [];
-    let daysOff = ptoData[countryCode] || ptoData['IE'];
+    let daysOff = ptoData['BE'];
     let optimizedDaysOff = [];
     let consecutiveDaysOff = [];
     let placeholder = "Country";
     let inputElement;
+
+    async function fetchCountryCode() {
+        try {
+            const response = await fetch('/cdn-cgi/trace');
+            const text = await response.text();
+            const countryCodeMatch = text.match(/cf-ipcountry=(\w+)/);
+            const countryCode = countryCodeMatch ? countryCodeMatch[1] : 'BE';
+            selectedCountry = countriesList[countryCode] || 'Belgium';
+            daysOff = ptoData[countryCode] || ptoData['BE'];
+            updateHolidays();
+        } catch (error) {
+            console.error('Error fetching country code:', error);
+        }
+    }
 
     function handleCountryChange(event) {
         const fullValue = event.target.value;
@@ -102,6 +102,7 @@
     }
 
     onMount(() => {
+        fetchCountryCode(); // Fetch the country code on mount
         adjustInputWidth(inputElement);
         inputElement.addEventListener('input', () => {
             adjustInputWidth(inputElement);
