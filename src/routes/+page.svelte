@@ -21,37 +21,40 @@
     let inputElement;
     let showHowItWorks = false;
 
+    // Default settings
+    let defaultYear = new Date().getFullYear();
+    let defaultCountry = '';
+    let defaultDaysOff = 0;
+
     onMount(() => {
         injectSpeedInsights();
 
-        const storedYear = localStorage.getItem('year');
-        const storedCountry = localStorage.getItem('selectedCountry');
-        const storedDaysOff = localStorage.getItem('daysOff');
+        // Always fetch the real country and PTO data
+        fetchCountryCode().then(() => {
+            defaultYear = new Date().getFullYear();
+            defaultCountry = selectedCountry;
+            defaultDaysOff = daysOff;
 
-        year = storedYear ? parseInt(storedYear, 10) : new Date().getFullYear();
-        selectedCountry = storedCountry || '';
-        daysOff = storedDaysOff ? parseInt(storedDaysOff, 10) : 0;
+            const storedYear = localStorage.getItem('year');
+            const storedCountry = localStorage.getItem('selectedCountry');
+            const storedDaysOff = localStorage.getItem('daysOff');
 
-        if (!storedYear || !storedCountry || !storedDaysOff) {
-            // First load: detect country and save initial settings
-            fetchCountryCode().then(() => {
-                localStorage.setItem('year', year);
-                localStorage.setItem('selectedCountry', selectedCountry);
-                localStorage.setItem('daysOff', daysOff);
+            year = storedYear ? parseInt(storedYear, 10) : defaultYear;
+            selectedCountry = storedCountry || defaultCountry;
+            daysOff = storedDaysOff ? parseInt(storedDaysOff, 10) : defaultDaysOff;
+
+            updateHolidays();
+            adjustInputWidth(inputElement);
+            inputElement.addEventListener('input', () => {
+                adjustInputWidth(inputElement);
+                const countryCode = Object.keys(countriesList).find(code => countriesList[code] === inputElement.value);
             });
-        }
-
-        updateHolidays();
-        adjustInputWidth(inputElement);
-        inputElement.addEventListener('input', () => {
-            adjustInputWidth(inputElement);
-            const countryCode = Object.keys(countriesList).find(code => countriesList[code] === inputElement.value);
+            inputElement.addEventListener('focus', () => {
+                inputElement.value = '';
+                adjustInputWidth(inputElement);
+            });
+            window.addEventListener('keydown', handleKeyDown);
         });
-        inputElement.addEventListener('focus', () => {
-            inputElement.value = '';
-            adjustInputWidth(inputElement);
-        });
-        window.addEventListener('keydown', handleKeyDown);
     });
 
     async function fetchCountryCode() {
@@ -62,7 +65,6 @@
             const countryCode = countryCodeMatch ? countryCodeMatch[1] : 'BE';
             selectedCountry = countriesList[countryCode] || '';
             daysOff = ptoData[countryCode] || 0;
-            updateHolidays();
         } catch (error) {
             console.error('Error fetching country code:', error);
         }
@@ -94,6 +96,16 @@
         }
         localStorage.setItem('year', year);
         localStorage.setItem('daysOff', daysOff);
+    }
+
+    function resetToDefault() {
+        year = defaultYear;
+        selectedCountry = defaultCountry;
+        daysOff = defaultDaysOff;
+        localStorage.setItem('year', year);
+        localStorage.setItem('selectedCountry', selectedCountry);
+        localStorage.setItem('daysOff', daysOff);
+        updateHolidays();
     }
 
     function handleKeyDown(event) {
@@ -286,7 +298,8 @@
     }
 
     a:hover {
-        text-decoration: underline;
+        color: #fff;
+        text-decoration: none;
     }
 
     .arrow-controls {
@@ -384,14 +397,11 @@
         color: #61dafb;
     }
 
-    .how-link {
-        color: #61dafb;
-        cursor: pointer;
-        text-decoration: underline;
-    }
-
-    .how-link:hover {
-        color: #fff;
+    .reset-link {
+        display: block;
+        margin-top: 10px;
+        text-align: center;
+        font-size: 0.9em;
     }
 </style>
 
@@ -401,7 +411,7 @@
         <p>
             In <strong>{selectedCountry}</strong>, there are <strong>{holidays.length}</strong> public holidays in <strong>{year}</strong>. 
             <br />
-            Let's stretch your time off from <strong>{daysOff} days</strong> to <strong>{consecutiveDaysOff.reduce((total, group) => total + group.totalDays, 0)} days</strong> (<a href="#how-it-works" class="how-link" on:click={toggleHowItWorks}>how?</a>)
+            Let's stretch your time off from <strong>{daysOff} days</strong> to <strong>{consecutiveDaysOff.reduce((total, group) => total + group.totalDays, 0)} days</strong> (<a href="#how-it-works" on:click={toggleHowItWorks}>how?</a>)
         </p>
     </div>
 
@@ -423,6 +433,9 @@
                 <button on:click={() => { year++; updateHolidays(); }} aria-label="Next year">▶</button>
             </span>
         </p>
+        {#if year !== defaultYear || selectedCountry !== defaultCountry || daysOff !== defaultDaysOff}
+            <a href="#" on:click|preventDefault={resetToDefault} class="reset-link">Reset to default</a>
+        {/if}
 
         <datalist id="countries">
             {#each Object.entries(countriesList) as [code, name]}
