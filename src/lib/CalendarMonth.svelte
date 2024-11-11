@@ -49,6 +49,15 @@
 
         return startDays > endDays ? startMonth : endMonth;
     }
+
+    function isConsecutiveDayOff(day) {
+        return consecutiveDaysOff.some(period => {
+            const start = period.startDate;
+            const end = period.endDate;
+            const date = new Date(year, month, day);
+            return date >= start && date <= end;
+        });
+    }
 </script>
 
 <div class="calendar">
@@ -57,7 +66,7 @@
         <div class="day"></div>
     {/each}
     {#each Array.from({ length: daysInMonth }, (_, i) => i + 1) as day}
-        <div class="day {(firstDay + day - 1) % 7 === 0 || (firstDay + day - 1) % 7 === 6 ? 'weekend' : ''} {getHoliday(day) ? 'holiday' : ''} {isOptimizedDayOff(day) ? 'optimized' : ''}">
+        <div class="day {(firstDay + day - 1) % 7 === 0 || (firstDay + day - 1) % 7 === 6 ? 'weekend' : ''} {getHoliday(day) ? 'holiday' : ''} {isOptimizedDayOff(day) ? 'optimized' : ''} {isConsecutiveDayOff(day) ? 'consecutive-day' : ''}">
             {day}
             {#if getHoliday(day)}
                 <Tooltip text={getHoliday(day).name} />
@@ -113,6 +122,9 @@
     .holiday {
         background-color: #3b1e6e;
         cursor: pointer;
+    }
+    .consecutive-day {
+        border: 1px solid rgba(255, 255, 255, 0.7);
     }
     .month-name {
         grid-column: span 7;
