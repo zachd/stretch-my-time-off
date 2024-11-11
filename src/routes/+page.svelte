@@ -20,6 +20,89 @@
     let inputElement;
     let showHowItWorks = false;
 
+    // Load settings from local storage
+    onMount(() => {
+        if (typeof window !== 'undefined') { // Check if running in the browser
+            const storedYear = localStorage.getItem('year');
+            const storedCountry = localStorage.getItem('selectedCountry');
+            const storedDaysOff = localStorage.getItem('daysOff');
+
+            if (storedYear) year = parseInt(storedYear);
+            if (storedCountry) selectedCountry = storedCountry;
+            if (storedDaysOff) daysOff = parseInt(storedDaysOff);
+
+            fetchCountryCode();
+            adjustInputWidth(inputElement);
+            inputElement.addEventListener('input', () => {
+                adjustInputWidth(inputElement);
+                const countryCode = Object.keys(countriesList).find(code => countriesList[code] === inputElement.value);
+            });
+            inputElement.addEventListener('focus', () => {
+                inputElement.value = '';
+                adjustInputWidth(inputElement);
+            });
+            window.addEventListener('keydown', handleKeyDown);
+        }
+    });
+
+    function handleCountryChange(event) {
+        const fullValue = event.target.value;
+        const countryCode = Object.keys(countriesList).find(code => countriesList[code] === fullValue);
+        if (countryCode) {
+            selectedCountry = fullValue;
+            daysOff = ptoData[countryCode] || 0;
+            updateHolidays();
+            if (typeof window !== 'undefined') { // Check if running in the browser
+                localStorage.setItem('selectedCountry', selectedCountry); // Save to local storage
+                localStorage.setItem('daysOff', daysOff); // Save to local storage
+            }
+        }
+        adjustInputWidth(event.target);
+    }
+
+    function updateHolidays() {
+        const countryCode = Object.keys(countriesList).find(code => countriesList[code] === selectedCountry);
+        if (countryCode) {
+            holidays = getHolidaysForYear(countryCode, year);
+            optimizedDaysOff = optimizeDaysOff(holidays, year, daysOff);
+            consecutiveDaysOff = calculateConsecutiveDaysOff(holidays, optimizedDaysOff, year);
+        } else {
+            holidays = [];
+            optimizedDaysOff = [];
+            consecutiveDaysOff = [];
+        }
+        if (typeof window !== 'undefined') { // Check if running in the browser
+            localStorage.setItem('year', year); // Save to local storage
+        }
+    }
+
+    function handleKeyDown(event) {
+        switch (event.key) {
+            case 'ArrowRight':
+                event.preventDefault();
+                year++;
+                updateHolidays();
+                break;
+            case 'ArrowLeft':
+                event.preventDefault();
+                year--;
+                updateHolidays();
+                break;
+            case 'ArrowUp':
+                event.preventDefault();
+                daysOff++;
+                updateHolidays();
+                break;
+            case 'ArrowDown':
+                event.preventDefault();
+                if (daysOff > 0) {
+                    daysOff--;
+                    updateHolidays();
+                }
+                break;
+        }
+    }
+
     async function fetchCountryCode() {
         try {
             const response = await fetch('/cdn-cgi/trace');
@@ -34,17 +117,6 @@
         }
     }
 
-    function handleCountryChange(event) {
-        const fullValue = event.target.value;
-        const countryCode = Object.keys(countriesList).find(code => countriesList[code] === fullValue);
-        if (countryCode) {
-            selectedCountry = fullValue;
-            daysOff = ptoData[countryCode] || 0;
-            updateHolidays();
-        }
-        adjustInputWidth(event.target);
-    }
-
     function adjustInputWidth(inputElement) {
         const tempSpan = document.createElement('span');
         tempSpan.style.visibility = 'hidden';
@@ -56,51 +128,11 @@
         document.body.removeChild(tempSpan);
     }
 
-    function updateHolidays() {
-        const countryCode = Object.keys(countriesList).find(code => countriesList[code] === selectedCountry);
-        if (countryCode) {
-            holidays = getHolidaysForYear(countryCode, year);
-            optimizedDaysOff = optimizeDaysOff(holidays, year, daysOff);
-            consecutiveDaysOff = calculateConsecutiveDaysOff(holidays, optimizedDaysOff, year);
-        } else {
-            holidays = [];
-            optimizedDaysOff = [];
-            consecutiveDaysOff = [];
-        }
-    }
-
     function getFlagEmoji(countryCode) {
         if (!countryCode) return ''; // Return an empty string if countryCode is not available
         return countryCode
             .toUpperCase()
             .replace(/./g, char => String.fromCodePoint(127397 + char.charCodeAt()));
-    }
-
-    function handleKeyDown(event) {
-        switch (event.key) {
-            case 'ArrowRight':
-                event.preventDefault();
-                year++;
-                updateHolidays(); // Recalculate holidays for the new year
-                break;
-            case 'ArrowLeft':
-                event.preventDefault();
-                year--;
-                updateHolidays(); // Recalculate holidays for the new year
-                break;
-            case 'ArrowUp':
-                event.preventDefault();
-                daysOff++;
-                updateHolidays(); // Recalculate holidays with updated days off
-                break;
-            case 'ArrowDown':
-                event.preventDefault();
-                if (daysOff > 0) {
-                    daysOff--;
-                    updateHolidays(); // Recalculate holidays with updated days off
-                }
-                break;
-        }
     }
 
     function toggleHowItWorks() {
@@ -112,20 +144,6 @@
             }
         }
     }
-
-    onMount(() => {
-        fetchCountryCode(); // Fetch the country code on mount
-        adjustInputWidth(inputElement);
-        inputElement.addEventListener('input', () => {
-            adjustInputWidth(inputElement);
-            const countryCode = Object.keys(countriesList).find(code => countriesList[code] === inputElement.value);
-        });
-        inputElement.addEventListener('focus', () => {
-            inputElement.value = '';
-            adjustInputWidth(inputElement);
-        });
-        window.addEventListener('keydown', handleKeyDown);
-    });
 
     updateHolidays();
 </script>
