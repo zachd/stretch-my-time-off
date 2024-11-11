@@ -552,7 +552,7 @@ export const ptoData = {
     GB: 20, // 28 total working days, 8-10 paid public holidays
 
     // United States
-    US: 0, // No federal or state statutory minimum
+    US: 10, // No federal or state statutory minimum, we put 10 days as a default
 
     // Uruguay
     UY: 20, // 20 days, 5 paid public holidays

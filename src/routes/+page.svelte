@@ -112,12 +112,12 @@
     }
 
     .header h2 {
-        font-size: 2em;
+        font-size: 2.3rem;
         margin: 0;
     }
 
     .header p {
-        font-size: 1em;
+        font-size: 0.9rem;
     }
 
     .content-box {
@@ -132,6 +132,7 @@
 
     .content-box p {
         text-align: center;
+        line-height: 2;
     }
 
     input {
@@ -205,7 +206,7 @@
         display: flex;
         align-items: center;
         margin: 0 10px;
-        font-size: 0.8em;
+        font-size: 0.9em;
     }
 
     .color-box {
@@ -257,7 +258,7 @@
         color: #fff;
         font-size: 0.8em;
         cursor: pointer;
-        padding: 3px;
+        padding: 2px;
         margin: 0 5px;
         border-radius: 4px;
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
@@ -265,8 +266,8 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width: 30px;
-        height: 30px;
+        width: 28px;
+        height: 28px;
         font-weight: bold;
     }
 
@@ -309,9 +310,9 @@
     <div class="header">
         <h2>Stretch My Time Off</h2>
         <p>
-            In {selectedCountry}, there are {holidays.length} public holidays in {year}. 
+            In <strong>{selectedCountry}</strong>, there are <strong>{holidays.length}</strong> public holidays in <strong>{year}</strong>. 
             <br />
-            Let's stretch your time off from {daysOff} days to {consecutiveDaysOff.reduce((total, group) => total + group.totalDays, 0)} days.
+            Let's stretch your time off from <strong>{daysOff} days</strong> to <strong>{consecutiveDaysOff.reduce((total, group) => total + group.totalDays, 0)} days</strong>.
         </p>
     </div>
 
@@ -323,10 +324,9 @@
             and have 
             <span class="arrow-controls">
                 <button on:click={() => { if (daysOff > 0) { daysOff--; updateHolidays(); } }} aria-label="Decrease days off">▼</button>
-                <span class="bold">{daysOff} days</span>
+                <span class="bold">{daysOff}</span>
                 <button on:click={() => { daysOff++; updateHolidays(); }} aria-label="Increase days off">▲</button>
-            </span>of vacation in
-            <span class="arrow-controls">
+            </span>days&nbsp;off in<span class="arrow-controls">
                 <button on:click={() => { year--; updateHolidays(); }} aria-label="Previous year">▼</button>
                 <span class="bold">{year}</span>
                 <button on:click={() => { year++; updateHolidays(); }} aria-label="Next year">▲</button>

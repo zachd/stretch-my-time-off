@@ -118,7 +118,7 @@
         grid-column: span 7;
         text-align: center;
         letter-spacing: 0.1em;
-        font-size: 0.9em;
+        font-size: 1em;
         text-transform: uppercase;
         color: #c5c6c7;
         margin-bottom: 5px;
@@ -133,6 +133,15 @@
         margin: 0;
     }
     .consecutive-days-off li {
-        font-size: 0.9em;
+        font-size: 1em;
+    }
+
+    @media (max-width: 600px) {
+        .month-name {
+            font-size: 0.9em;
+        }
+        .consecutive-days-off li {
+            font-size: 0.8em;
+        }
     }
 </style> 
