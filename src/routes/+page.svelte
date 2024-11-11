@@ -1,6 +1,7 @@
 <script>
     import { onMount } from 'svelte';
     import { injectSpeedInsights } from '@vercel/speed-insights';
+    import { inject } from '@vercel/analytics'
     import countries from 'i18n-iso-countries';
     import enLocale from 'i18n-iso-countries/langs/en.json';
     import CalendarMonth from '../lib/CalendarMonth.svelte';
@@ -27,6 +28,7 @@
     let defaultDaysOff = 0;
 
     onMount(() => {
+        inject();
         injectSpeedInsights();
 
         // Always fetch the real country and PTO data
@@ -168,7 +170,7 @@
     .header {
         max-width: 800px;
         margin: 20px auto;
-        padding: 0 10px;
+        padding: 0 30px;
         text-align: center;
     }
 
@@ -366,7 +368,7 @@
 
     .how-it-works {
         margin: 20px auto;
-        padding: 15px;
+        padding: 25px;
         background-color: #111;
         color: #fff;
         border-radius: 8px;
@@ -407,11 +409,11 @@
 
 <main>
     <div class="header">
-        <h2>🌴 Stretch My Time Off</h2>
+        <h2>🌴 Stretch&nbsp;My Time&nbsp;Off</h2>
         <p>
-            In <strong>{getFlagEmoji(Object.keys(countriesList).find(code => countriesList[code] === selectedCountry))} {selectedCountry}</strong>, there are <strong>{holidays.length}</strong> public holidays in <strong>{year}</strong>. 
+            In <strong>{getFlagEmoji(Object.keys(countriesList).find(code => countriesList[code] === selectedCountry))} {selectedCountry}</strong>, there are <strong>{holidays.length}</strong> public holidays in&nbsp;<strong>{year}</strong>. 
             <br />
-            Let's stretch your time off from <strong>{daysOff} days</strong> to <strong>{consecutiveDaysOff.reduce((total, group) => total + group.totalDays, 0)} days</strong> (<a href="#how-it-works" on:click={toggleHowItWorks}>how?</a>)
+            Let's stretch your time off from <strong>{daysOff}&nbsp;days</strong> to <strong>{consecutiveDaysOff.reduce((total, group) => total + group.totalDays, 0)}&nbsp;days</strong> (<a href="#how-it-works" on:click={toggleHowItWorks}>how?</a>)
         </p>
     </div>
 
@@ -473,7 +475,7 @@
     <div id="how-it-works" class="content-box how-it-works">
         <h3>How does this work?</h3>
         <p>
-            This tool detects your country from your IP, uses a default number of government-mandated days off from Wikipedia, and a database of holidays for your country.
+            This tool detects your country from your IP, uses a default number of government-mandated days off from <a href="https://en.wikipedia.org/wiki/List_of_minimum_annual_leave_by_country" target="_blank" rel="noopener noreferrer">Wikipedia</a>, and a <a href={`https://github.com/commenthol/date-holidays/blob/master/data/countries/${Object.keys(countriesList).find(code => countriesList[code] === selectedCountry)}.yaml`} target="_blank" rel="noopener noreferrer">list of holidays</a> for {selectedCountry}.
         </p>
         <p>
             The algorithm prioritizes filling the shortest gaps first. It optimizes for spreading your holidays throughout the year to create the most number of consecutive vacation periods.
