@@ -1,6 +1,6 @@
 # Stretch My Time Off
 
-Welcome to **Stretch My Time Off**, a personal project designed to help you optimize your vacation days by strategically aligning public holidays and personal leave. This tool allows you to maximize your time off, making it easier to plan the ultimate getaway.
+Welcome to **Stretch My Time Off**, a personal project designed to help you optimize your vacation days by strategically aligning public holidays and personal leave. This tool allows you to maximize your time off.
 
 ## Table of Contents
 
@@ -15,7 +15,7 @@ Welcome to **Stretch My Time Off**, a personal project designed to help you opti
 
 ## About the Project
 
-I created this project out of a personal need to better manage my vacation days. As someone who loves to travel, I wanted a tool that could help me make the most of my time off by aligning it with public holidays. This project was coded using the Cursor IDE with the assistance of GPT-4o, and it is hosted on Vercel with Cloudflare providing additional services.
+I created this project out of a personal need to better manage vacation days. As someone who loves to travel, I wanted a tool that could help me make the most of my time off by aligning it with public holidays. This project was coded using the Cursor IDE with the assistance of GPT-4o, and it is hosted on Vercel with Cloudflare providing additional services.
 
 ## Features
 
@@ -61,6 +61,33 @@ To get a local copy up and running, follow these steps:
 
 Once the development server is running, you can access the application at `http://localhost:3000`. Enter your country to see the public holidays and use the interactive calendar to plan your time off.
 
+
+## Algorithm
+
+The core of this project is an algorithm that optimizes your personal leave days to create the longest possible chains of consecutive days off. Here's a simplified explanation:
+
+1. **Identify Public Holidays and Weekends**: The algorithm first identifies all public holidays and weekends for the selected year and country.
+
+2. **Find Gaps**: It then finds gaps between these days off that can be filled with personal leave days.
+
+3. **Rank Gaps**: The gaps are ranked based on their efficiency in creating longer chains of days off.
+
+4. **Select Days Off**: The algorithm selects the most efficient gaps to fill with your available personal leave days.
+
+5. **Calculate Consecutive Days Off**: Finally, it calculates the total number of consecutive days off you can achieve.
+
+Here's a visual representation of the algorithm using a Mermaid diagram:
+
+```mermaid
+graph TD;
+    A[Start] --> B[Identify Public Holidays and Weekends]
+    B --> C[Find Gaps Between Days Off]
+    C --> D[Rank Gaps by Efficiency]
+    D --> E[Select Days Off to Fill Gaps]
+    E --> F[Calculate Consecutive Days Off]
+    F --> G[End]
+```
+
 ## Contributing
 
 Contributions are welcome! If you have suggestions for improvements or new features, feel free to open an issue or submit a pull request.
@@ -81,7 +108,3 @@ Distributed under the MIT License. See `LICENSE` for more information.
 - **Vercel**: For seamless deployment and hosting.
 - **Cloudflare**: For robust CDN and security features.
 - **Cursor IDE and GPT-4o**: For making the development process efficient and enjoyable.
-
----
-
-Thank you for checking out **Stretch My Time Off**! I hope you find it as useful as I do in planning your vacations. If you have any questions or feedback, feel free to reach out.
