@@ -18,6 +18,7 @@
     let consecutiveDaysOff = [];
     let placeholder = "Country";
     let inputElement;
+    let showHowItWorks = false;
 
     async function fetchCountryCode() {
         try {
@@ -102,6 +103,16 @@
         }
     }
 
+    function toggleHowItWorks() {
+        showHowItWorks = !showHowItWorks;
+        if (showHowItWorks) {
+            const howItWorksElement = document.querySelector('.how-it-works');
+            if (howItWorksElement) {
+                howItWorksElement.scrollIntoView({ behavior: 'smooth' });
+            }
+        }
+    }
+
     onMount(() => {
         fetchCountryCode(); // Fetch the country code on mount
         adjustInputWidth(inputElement);
@@ -130,10 +141,6 @@
     .header h2 {
         font-size: 2.3rem;
         margin: 0;
-    }
-
-    .header p {
-        font-size: 0.9rem;
     }
 
     .content-box {
@@ -251,12 +258,12 @@
         font-size: 0.8em;
     }
 
-    footer a {
+    a {
         color: #66fcf1;
         text-decoration: none;
     }
 
-    footer a:hover {
+    a:hover {
         text-decoration: underline;
     }
 
@@ -321,6 +328,49 @@
         background-color: #222;
         position: relative;
     }
+
+    .how-it-works {
+        margin: 20px auto;
+        padding: 15px;
+        background-color: #111;
+        color: #fff;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        transition: max-height 0.3s ease;
+        overflow: hidden;
+    }
+
+    .how-it-works p {
+        text-align: left;
+    }
+
+    .how-it-works h3 {
+        margin-top: 0;
+    }
+
+    .toggle-text {
+        color: #fff;
+        cursor: pointer;
+        margin: 20px auto;
+        display: block;
+        text-align: center;
+        font-size: 1em;
+        transition: color 0.3s;
+    }
+
+    .toggle-text:hover {
+        color: #61dafb;
+    }
+
+    .how-link {
+        color: #61dafb;
+        cursor: pointer;
+        text-decoration: underline;
+    }
+
+    .how-link:hover {
+        color: #fff;
+    }
 </style>
 
 <main>
@@ -329,7 +379,7 @@
         <p>
             In <strong>{selectedCountry}</strong>, there are <strong>{holidays.length}</strong> public holidays in <strong>{year}</strong>. 
             <br />
-            Let's stretch your time off from <strong>{daysOff} days</strong> to <strong>{consecutiveDaysOff.reduce((total, group) => total + group.totalDays, 0)} days</strong>.
+            Let's stretch your time off from <strong>{daysOff} days</strong> to <strong>{consecutiveDaysOff.reduce((total, group) => total + group.totalDays, 0)} days</strong> (<a href="#how-it-works" class="how-link" on:click={toggleHowItWorks}>how?</a>)
         </p>
     </div>
 
@@ -379,6 +429,25 @@
             {/each}
         </div>
     </div>
+
+    <div class="toggle-text" on:click={toggleHowItWorks}>
+        {showHowItWorks ? 'Hide Details' : 'How does this work?'}
+    </div>
+
+    {#if showHowItWorks}
+    <div id="how-it-works" class="content-box how-it-works">
+        <h3>How does this work?</h3>
+        <p>
+            The app uses your country to fetch public holiday data. The algorithm analyzes these holidays and weekends to identify gaps that can be optimized. It ranks these gaps based on their potential to be filled with personal leave days. 
+        </p>
+        <p>
+            By strategically selecting the most efficient gaps, it calculates the longest possible sequences of consecutive days off. This approach maximizes your vacation time by aligning personal leave with public holidays, ensuring you make the most of your available days.
+        </p>
+        <p>
+            Built with <a href="https://kit.svelte.dev/" target="_blank">SvelteKit</a>, this tool uses JavaScript and CSS for responsiveness. Hosted on <a href="https://vercel.com/" target="_blank">Vercel</a> with <a href="https://www.cloudflare.com/" target="_blank">Cloudflare</a> for CDN and security, it was developed using AI tools like GPT-4o.
+        </p>
+    </div>
+    {/if}
 </main>
 
 <footer>
