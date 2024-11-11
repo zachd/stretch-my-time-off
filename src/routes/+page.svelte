@@ -252,6 +252,41 @@
     .flag {
         font-size: 2em; /* Adjust the size as needed */
     }
+
+    .calendar-key {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 10px;
+        background-color: #1e1e1e;
+        border-radius: 5px;
+        color: #e0e0e0;
+    }
+
+    .key-item {
+        display: flex;
+        align-items: center;
+        margin: 0 15px;
+    }
+
+    .color-box {
+        width: 20px;
+        height: 20px;
+        margin-right: 8px;
+        border-radius: 3px;
+    }
+
+    .color-box.weekend {
+        background-color: #333;
+    }
+
+    .color-box.optimized {
+        background-color: #4caf50;
+    }
+
+    .color-box.holiday {
+        background-color: #3b1e6e;
+    }
 </style>
 
 <header>
@@ -285,6 +320,17 @@
     </div>
 
     <div class="content-box">
+        <div class="calendar-key">
+            <div class="key-item">
+                <span class="color-box weekend"></span> Weekend
+            </div>
+            <div class="key-item">
+                <span class="color-box optimized"></span> Day Off
+            </div>
+            <div class="key-item">
+                <span class="color-box holiday"></span> Public Holiday
+            </div>
+        </div>
         <div class="calendar-grid">
             {#each months as month}
                 <div class="calendar-container">
