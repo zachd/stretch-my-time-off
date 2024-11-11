@@ -42,7 +42,7 @@ This project was created to efficiently manage vacation days by aligning them wi
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/yourusername/stretch-my-time-off.git
+   git clone https://github.com/zachd/stretch-my-time-off.git
    ```
 
 2. **Navigate to the project directory**:

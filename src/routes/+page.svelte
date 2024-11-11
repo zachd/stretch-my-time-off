@@ -383,4 +383,5 @@
 
 <footer>
     <p>Made with <span style="color: red;">📅</span> by <a href="https://zach.ie" target="_blank">Zach</a></p>
+    <p><a href="https://github.com/zachd/stretch-my-time-off" target="_blank">View on GitHub</a></p>
 </footer> 
