@@ -63,8 +63,8 @@
         try {
             const response = await fetch('/cdn-cgi/trace');
             const text = await response.text();
-            const countryCodeMatch = text.match(/cf-ipcountry=(\w+)/);
-            const countryCode = countryCodeMatch ? countryCodeMatch[1] : 'BE';
+            const countryCodeMatch = text.match(/loc=(\w+)/);
+            const countryCode = countryCodeMatch ? countryCodeMatch[1] : '';
             selectedCountry = countriesList[countryCode] || '';
             daysOff = ptoData[countryCode] || 0;
         } catch (error) {
