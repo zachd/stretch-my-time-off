@@ -7,6 +7,7 @@
     import CalendarMonth from '../lib/CalendarMonth.svelte';
     import { getHolidaysForYear, optimizeDaysOff, calculateConsecutiveDaysOff } from '../lib/holidayUtils.js';
     import { ptoData } from '../lib/ptoData.js';
+    import Holidays from 'date-holidays';
 
     countries.registerLocale(enLocale);
     let countriesList = countries.getNames('en');
@@ -19,13 +20,32 @@
     let optimizedDaysOff = [];
     let consecutiveDaysOff = [];
     let placeholder = "Country";
-    let inputElement;
+    let countriesInput;
+    let statesInput;
     let showHowItWorks = false;
 
     // Default settings
     let defaultYear = new Date().getFullYear();
     let defaultCountry = '';
     let defaultDaysOff = 0;
+
+    let selectedState = '';
+    let selectedStateCode = '';
+    let statesList = [];
+
+    function updateStatesList(countryCode) {
+        const hd = new Holidays(countryCode);
+        statesList = hd.getStates(countryCode) || [];
+    }
+
+    function handleStateChange(event) {
+        const stateName = event.target.value;
+        selectedStateCode = Object.keys(statesList).find(code => statesList[code] === stateName);
+        selectedState = stateName;
+        updateHolidays();
+        localStorage.setItem('selectedState', selectedState);
+        localStorage.setItem('selectedStateCode', selectedStateCode);
+    }
 
     onMount(() => {
         inject();
@@ -40,23 +60,25 @@
             const storedYear = localStorage.getItem('year');
             const storedCountry = localStorage.getItem('selectedCountry');
             const storedDaysOff = localStorage.getItem('daysOff');
+            const storedState = localStorage.getItem('selectedState');
+            const storedStateCode = localStorage.getItem('selectedStateCode');
 
             year = storedYear ? parseInt(storedYear, 10) : defaultYear;
             selectedCountry = storedCountry || defaultCountry;
             daysOff = storedDaysOff ? parseInt(storedDaysOff, 10) : defaultDaysOff;
+            selectedState = storedState || '';
+            selectedStateCode = storedStateCode || '';
+
+            const countryCode = Object.keys(countriesList).find(code => countriesList[code] === selectedCountry);
+            updateStatesList(countryCode);
 
             updateHolidays();
-            adjustInputWidth(inputElement);
-            inputElement.addEventListener('input', () => {
-                adjustInputWidth(inputElement);
-                const countryCode = Object.keys(countriesList).find(code => countriesList[code] === inputElement.value);
-            });
-            inputElement.addEventListener('focus', () => {
-                inputElement.value = '';
-                adjustInputWidth(inputElement);
-            });
-            window.addEventListener('keydown', handleKeyDown);
         });
+
+        const countryCode = Object.keys(countriesList).find(code => countriesList[code] === selectedCountry);
+        if (countryCode) {
+            updateStatesList(countryCode);
+        }
     });
 
     async function fetchCountryCode() {
@@ -78,17 +100,21 @@
         if (countryCode) {
             selectedCountry = fullValue;
             daysOff = ptoData[countryCode] || 0;
+            selectedState = ''; // Reset state
+            selectedStateCode = ''; // Reset state code
+            updateStatesList(countryCode); // Update states list for the new country
             updateHolidays();
             localStorage.setItem('selectedCountry', selectedCountry);
+            localStorage.setItem('selectedState', selectedState);
+            localStorage.setItem('selectedStateCode', selectedStateCode);
             localStorage.setItem('daysOff', daysOff);
         }
-        adjustInputWidth(event.target);
     }
 
     function updateHolidays() {
         const countryCode = Object.keys(countriesList).find(code => countriesList[code] === selectedCountry);
         if (countryCode) {
-            holidays = getHolidaysForYear(countryCode, year);
+            holidays = getHolidaysForYear(countryCode, year, selectedStateCode);
             optimizedDaysOff = optimizeDaysOff(holidays, year, daysOff);
             consecutiveDaysOff = calculateConsecutiveDaysOff(holidays, optimizedDaysOff, year);
         } else {
@@ -103,9 +129,13 @@
     function resetToDefault() {
         year = defaultYear;
         selectedCountry = defaultCountry;
+        selectedState = '';
+        selectedStateCode = '';
         daysOff = defaultDaysOff;
         localStorage.setItem('year', year);
         localStorage.setItem('selectedCountry', selectedCountry);
+        localStorage.setItem('selectedState', selectedState);
+        localStorage.setItem('selectedStateCode', selectedStateCode);
         localStorage.setItem('daysOff', daysOff);
         updateHolidays();
     }
@@ -137,16 +167,22 @@
         }
     }
 
-    function adjustInputWidth(inputElement) {
-        const tempSpan = document.createElement('span');
-        tempSpan.style.visibility = 'hidden';
-        tempSpan.style.position = 'absolute';
-        tempSpan.style.whiteSpace = 'nowrap';
-        tempSpan.textContent = inputElement.value || inputElement.placeholder;
-        document.body.appendChild(tempSpan);
-        inputElement.style.width = `${tempSpan.offsetWidth + 30}px`;
-        document.body.removeChild(tempSpan);
+    function adjustInputWidth(inputElement, value) {
+        if (typeof window !== 'undefined' && inputElement) { // Ensure this runs only in the browser
+            const tempSpan = document.createElement('span');
+            tempSpan.style.visibility = 'hidden';
+            tempSpan.style.position = 'absolute';
+            tempSpan.style.whiteSpace = 'nowrap';
+            tempSpan.textContent = value || inputElement.value || inputElement.placeholder;
+            document.body.appendChild(tempSpan);
+            inputElement.style.width = `${tempSpan.offsetWidth + 30}px`;
+            document.body.removeChild(tempSpan);
+        }
     }
+
+    // Reactive statements to adjust input width when values change
+    $: if (countriesInput) adjustInputWidth(countriesInput, selectedCountry);
+    $: if (statesInput) adjustInputWidth(statesInput, selectedState);
 
     function getFlagEmoji(countryCode) {
         if (!countryCode) return ''; // Return an empty string if countryCode is not available
@@ -411,7 +447,14 @@
     <div class="header">
         <h2>🌴 Stretch&nbsp;My Time&nbsp;Off</h2>
         <p>
-            In <strong>{getFlagEmoji(Object.keys(countriesList).find(code => countriesList[code] === selectedCountry))} {selectedCountry}</strong>, there are <strong>{holidays.length}</strong> public holidays in&nbsp;<strong>{year}</strong>. 
+            In 
+            <strong>
+                {getFlagEmoji(Object.keys(countriesList).find(code => countriesList[code] === selectedCountry))}
+                {#if selectedState}
+                    {selectedState}, 
+                {/if}
+                {selectedCountry}
+            </strong>, there are <strong>{holidays.length}</strong> public holidays in&nbsp;<strong>{year}</strong>. 
             <br />
             Let's stretch your time off from <strong>{daysOff}&nbsp;days</strong> to <strong>{consecutiveDaysOff.reduce((total, group) => total + group.totalDays, 0)}&nbsp;days</strong> (<a href="#how-it-works" on:click={toggleHowItWorks}>how?</a>)
         </p>
@@ -421,7 +464,16 @@
         <p>
             I live in 
             <span class="flag" style="vertical-align: middle;">{getFlagEmoji(Object.keys(countriesList).find(code => countriesList[code] === selectedCountry))}</span>
-            <input bind:this={inputElement} list="countries" class="editable-input bold" bind:value={selectedCountry} placeholder={placeholder} on:input={handleCountryChange} on:focus={() => { inputElement.value = ''; adjustInputWidth(); }} aria-label="Select country" />
+            {#if Object.keys(statesList).length > 0}
+                <input bind:this={statesInput} list="states" class="editable-input bold" bind:value={selectedState} on:input={(e) => { handleStateChange(e); }} on:focus={() => { statesInput.value = ''; }} placeholder="State" aria-label="State" />
+                <datalist id="states">
+                    {#each Object.entries(statesList) as [code, name]}
+                        <option value={name}>{name}</option>
+                    {/each}
+                </datalist>
+                in
+            {/if}
+            <input bind:this={countriesInput} list="countries" class="editable-input bold" bind:value={selectedCountry} placeholder={placeholder} on:input={(e) => { handleCountryChange(e); }} on:focus={() => { countriesInput.value = ''; }} aria-label="Select country" />
             and have 
             <span class="arrow-controls">
                 <button on:click={() => { if (daysOff > 0) { daysOff--; updateHolidays(); } }} aria-label="Decrease days off">▼</button>

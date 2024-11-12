@@ -29,8 +29,8 @@ const daysBetween = (startDate, endDate) => Math.round((endDate - startDate) / M
 const formatDate = date => date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
 // Get holidays for a specific year and country
-export function getHolidaysForYear(countryCode, year) {
-    const hd = new Holidays(countryCode);
+export function getHolidaysForYear(countryCode, year, stateCode = '') {
+    const hd = new Holidays(countryCode, stateCode);
     return hd.getHolidays(year)
         .filter(holiday => holiday.type === 'public')
         .map(holiday => ({
