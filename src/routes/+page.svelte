@@ -37,7 +37,7 @@
 
     $: selectedCountryCode = Object.keys(countriesList).find(code => countriesList[code] === selectedCountry);
 
-    $: if (selectedCountryCode || selectedStateCode ) {
+    $: if (selectedCountryCode || selectedStateCode || daysOff || year) {
         updateHolidays();
     }
 

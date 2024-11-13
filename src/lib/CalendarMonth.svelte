@@ -91,20 +91,11 @@
         return dayOfWeek === saturdayIndex || dayOfWeek === sundayIndex;
     }
 
-    // Function to get the localized day initials based on the first day of the week
-    function getLocalizedDayInitials(locale) {
-        const formatter = new Intl.DateTimeFormat(locale, { weekday: 'short' });
-        const dayInitials = [];
-        for (let i = 0; i < 7; i++) {
-            const date = new Date(Date.UTC(2021, 0, i + 3)); // Start from a known Thursday to ensure full week coverage
-            const dayName = formatter.format(date);
-            dayInitials.push(dayName.charAt(0).toUpperCase());
-        }
-        return dayInitials;
-    }
+    // Fixed array of day initials starting from Sunday
+    const dayInitials = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
     // Reactive declaration to get the ordered day initials
-    $: orderedDayInitials = getLocalizedDayInitials(locale).slice(firstDayOfWeek).concat(getLocalizedDayInitials(locale).slice(0, firstDayOfWeek));
+    $: orderedDayInitials = dayInitials.slice(firstDayOfWeek).concat(dayInitials.slice(0, firstDayOfWeek));
 </script>
 
 <div class="calendar">
