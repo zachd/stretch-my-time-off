@@ -12,7 +12,7 @@
     countries.registerLocale(enLocale);
     let countriesList = countries.getNames('en');
 
-    let year = new Date().getFullYear();
+    let year;
     let months = Array.from({ length: 12 }, (_, i) => i);
     let selectedCountry = '';
     let holidays = [];
@@ -37,8 +37,16 @@
 
     $: selectedCountryCode = Object.keys(countriesList).find(code => countriesList[code] === selectedCountry);
 
-    $: if (selectedCountryCode || selectedStateCode || daysOff) {
+    $: if (selectedCountryCode || selectedStateCode ) {
         updateHolidays();
+    }
+
+    $: if (daysOff) {
+        localStorage.setItem('daysOff', daysOff);
+    }
+
+    $: if (year) {
+        localStorage.setItem('year', year);
     }
 
     function updateStatesList(countryCode) {
@@ -62,7 +70,7 @@
         fetchCountryCode().then(() => {
             defaultYear = new Date().getFullYear();
             defaultCountry = selectedCountry;
-            defaultDaysOff = daysOff;
+            defaultDaysOff = ptoData[selectedCountryCode];
 
             const storedYear = localStorage.getItem('year');
             const storedCountry = localStorage.getItem('selectedCountry');
@@ -75,6 +83,7 @@
             daysOff = storedDaysOff ? parseInt(storedDaysOff, 10) : defaultDaysOff;
             selectedState = storedState || '';
             selectedStateCode = storedStateCode || '';
+            updateHolidays();
         });
 
         if (selectedCountryCode) {
@@ -85,12 +94,11 @@
 
     async function fetchCountryCode() {
         try {
-            const response = await fetch('/cdn-cgi/trace');
+            const response = await fetch('https://stretchmytimeoff.com/cdn-cgi/trace');
             const text = await response.text();
             const countryCodeMatch = text.match(/loc=(\w+)/);
             const countryCode = countryCodeMatch ? countryCodeMatch[1] : '';
             selectedCountry = countriesList[countryCode] || '';
-            daysOff = ptoData[countryCode] || 0;
         } catch (error) {
             console.error('Error fetching country code:', error);
         }
@@ -126,8 +134,6 @@
             optimizedDaysOff = [];
             consecutiveDaysOff = [];
         }
-        localStorage.setItem('year', year);
-        localStorage.setItem('daysOff', daysOff);
     }
 
     function resetToDefault() {
@@ -688,6 +694,9 @@
         </p>
         <p>
             The algorithm prioritizes filling the shortest gaps first. It optimizes for spreading your holidays throughout the year to create the most number of consecutive vacation periods.
+        </p>
+        <p>
+            For the calculation, it counts all vacation stretches that are 3 days or longer, including those lucky 3-day weekends thanks to public holidays. It's slightly optimistic, but captures the spirit of maximising time off.
         </p>
         <p>
             Built with <a href="https://kit.svelte.dev/" target="_blank" rel="noopener noreferrer">SvelteKit</a>. Hosted on <a href="https://vercel.com/" target="_blank" rel="noopener noreferrer">Vercel</a> with <a href="https://www.cloudflare.com/" target="_blank" rel="noopener noreferrer">Cloudflare</a>. Developed using <a href="https://www.cursor.com/" target="_blank" rel="noopener noreferrer">Cursor</a>, an AI-powered code editor, and <a href="https://openai.com/research/gpt-4" target="_blank" rel="noopener noreferrer">GPT-4o</a>.
