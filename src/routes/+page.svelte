@@ -33,6 +33,8 @@
     let selectedStateCode = '';
     let statesList = [];
 
+    let showHolidaysList = false; // State to toggle the visibility of the holidays list
+
     function updateStatesList(countryCode) {
         const hd = new Holidays(countryCode);
         statesList = hd.getStates(countryCode) || [];
@@ -68,10 +70,6 @@
             daysOff = storedDaysOff ? parseInt(storedDaysOff, 10) : defaultDaysOff;
             selectedState = storedState || '';
             selectedStateCode = storedStateCode || '';
-
-            const countryCode = Object.keys(countriesList).find(code => countriesList[code] === selectedCountry);
-            updateStatesList(countryCode);
-
             updateHolidays();
         });
 
@@ -114,9 +112,16 @@
     function updateHolidays() {
         const countryCode = Object.keys(countriesList).find(code => countriesList[code] === selectedCountry);
         if (countryCode) {
-            holidays = getHolidaysForYear(countryCode, year, selectedStateCode);
-            optimizedDaysOff = optimizeDaysOff(holidays, year, daysOff);
-            consecutiveDaysOff = calculateConsecutiveDaysOff(holidays, optimizedDaysOff, year);
+            updateStatesList(countryCode);
+            let allHolidays = getHolidaysForYear(countryCode, year, selectedStateCode);
+            holidays = allHolidays.map(holiday => ({
+                ...holiday,
+                hidden: isHolidayHidden(holiday)
+            }));
+            // Filter out hidden holidays for calculations
+            const visibleHolidays = holidays.filter(h => !h.hidden);
+            optimizedDaysOff = optimizeDaysOff(visibleHolidays, year, daysOff);
+            consecutiveDaysOff = calculateConsecutiveDaysOff(visibleHolidays, optimizedDaysOff, year);
         } else {
             holidays = [];
             optimizedDaysOff = [];
@@ -200,6 +205,50 @@
             }
         }
     }
+
+    // Function to toggle the visibility of a holiday
+    function toggleHolidayVisibility(holiday) {
+        const countryCode = Object.keys(countriesList).find(code => countriesList[code] === selectedCountry);
+        if (!countryCode) return;
+
+        const storageKey = `hiddenHolidays_${countryCode}`;
+        let hiddenHolidays = JSON.parse(localStorage.getItem(storageKey)) || {};
+
+        // Toggle the hidden state of the holiday
+        hiddenHolidays[holiday.date] = !hiddenHolidays[holiday.date];
+        localStorage.setItem(storageKey, JSON.stringify(hiddenHolidays));
+
+        // Update the holidays list to trigger reactivity
+        holidays = holidays.map(h => {
+            if (h.date === holiday.date) {
+                return { ...h, hidden: hiddenHolidays[h.date] };
+            }
+            return h;
+        });
+
+        // Recalculate holidays to ensure hidden ones are excluded
+        updateHolidays();
+    }
+
+    // Function to check if a holiday is hidden
+    function isHolidayHidden(holiday) {
+        const countryCode = Object.keys(countriesList).find(code => countriesList[code] === selectedCountry);
+        if (!countryCode) return false;
+
+        const storageKey = `hiddenHolidays_${countryCode}`;
+        const hiddenHolidays = JSON.parse(localStorage.getItem(storageKey)) || {};
+
+        return hiddenHolidays[holiday.date] || false;
+    }
+
+    // Function to format the date
+    function formatDate(dateString) {
+        const options = { day: '2-digit', month: 'short', year: 'numeric' };
+        return new Date(dateString).toLocaleDateString('en-GB', options);
+    }
+
+    // Reactive statement to calculate the number of visible holidays
+    $: visibleHolidaysCount = holidays.filter(h => !h.hidden).length;
 </script>
 
 <style>
@@ -439,7 +488,84 @@
         display: block;
         margin-top: 10px;
         text-align: center;
-        font-size: 0.9em;
+        font-size: 0.8em;
+    }
+
+    .color-box.holiday {
+        background-color: #3b1e6e;
+        display: inline-block;
+        width: 15px;
+        height: 15px;
+        margin-right: 5px;
+        border-radius: 3px;
+    }
+
+    .content-box ul {
+        list-style-type: none;
+        padding: 0;
+    }
+
+    .content-box li {
+        display: flex;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+
+    .content-box button {
+        margin-left: 10px;
+        background-color: #444;
+        border: none;
+        color: #fff;
+        padding: 5px 10px;
+        cursor: pointer;
+        border-radius: 5px;
+    }
+
+    .content-box button:hover {
+        background-color: #555;
+    }
+
+    .strikethrough {
+        text-decoration: line-through;
+    }
+
+    .edit-link {
+        cursor: pointer;
+        font-size: 0.8em;
+        text-decoration: none;
+    }
+
+    .edit-link:hover {
+        color: #fff;
+    }
+
+    .holidays-list {
+        margin: 10px;
+    }
+
+    .holidays-list ul {
+        list-style-type: none;
+        padding: 0;
+    }
+
+    .holidays-list li {
+        display: flex;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+
+    .holidays-list button {
+        margin-left: 10px;
+        background-color: #444;
+        border: none;
+        color: #fff;
+        padding: 5px 25px;
+        cursor: pointer;
+        border-radius: 5px;
+    }
+
+    .holidays-list button:hover {
+        background-color: #555;
     }
 </style>
 
@@ -454,8 +580,9 @@
                     {selectedState}, 
                 {/if}
                 {selectedCountry}
-            </strong>, there are <strong>{holidays.length}</strong> public holidays in&nbsp;<strong>{year}</strong>. 
-            <br />
+            </strong>, there are <strong>{holidays.length}</strong> public holidays{#if visibleHolidaysCount < holidays.length}&nbsp;(<strong>{visibleHolidaysCount} selected</strong>){/if} in&nbsp;<strong>{year}</strong>. 
+        </p>
+        <p>
             Let's stretch your time off from <strong>{daysOff}&nbsp;days</strong> to <strong>{consecutiveDaysOff.reduce((total, group) => total + group.totalDays, 0)}&nbsp;days</strong> (<a href="#how-it-works" on:click={toggleHowItWorks}>how?</a>)
         </p>
     </div>
@@ -488,7 +615,7 @@
             </span>
         </p>
         {#if year !== defaultYear || selectedCountry !== defaultCountry || daysOff !== defaultDaysOff}
-            <a href="#" on:click|preventDefault={resetToDefault} class="reset-link">Reset to default</a>
+            <a href="#" on:click|preventDefault={resetToDefault} class="reset-link">Reset to my country</a>
         {/if}
 
         <datalist id="countries">
@@ -504,12 +631,37 @@
                 <span class="color-box weekend"></span> Weekend
             </div>
             <div class="key-item">
-                <span class="color-box optimized"></span> Day Off
+                <span class="color-box optimized"></span> Day&nbsp;Off
             </div>
             <div class="key-item">
-                <span class="color-box holiday"></span> Public Holiday
+                <span class="color-box holiday"></span> Public&nbsp;Holiday
             </div>
+            {#if holidays.length > 0}
+                <a href="#" on:click|preventDefault={() => showHolidaysList = !showHolidaysList} class="edit-link">
+                    (edit&nbsp;list)
+                </a>
+            {/if}
         </div>
+
+        {#if showHolidaysList}
+        <div class="holidays-list">
+            <h3>Public Holidays</h3>
+            <ul>
+                {#each holidays as holiday}
+                    <li>
+                        <span class="color-box holiday"></span>
+                        <span class={holiday.hidden ? 'strikethrough' : ''}>
+                            {formatDate(holiday.date)}: {holiday.name}
+                        </span>
+                        <button on:click={() => toggleHolidayVisibility(holiday)}>
+                            {holiday.hidden ? 'Show' : 'Hide'}
+                        </button>
+                    </li>
+                {/each}
+            </ul>
+        </div>
+        {/if}
+
         <div class="calendar-grid">
             {#each months as month}
                 <div class="calendar-container">
