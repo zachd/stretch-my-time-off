@@ -1,4 +1,4 @@
-export const ptoData = {
+export const ptoData: Record<string, number> = {
     // Afghanistan
     AF: 20, // 20 days recreational leave, 15 paid public holidays
 

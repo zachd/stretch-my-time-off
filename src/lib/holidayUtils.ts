@@ -5,32 +5,32 @@ const MS_IN_A_DAY = 86400000;
 const MAX_GAP_LENGTH = 5;
 
 // Helper function to check if a date is a weekend
-const isWeekend = date => date.getDay() === 0 || date.getDay() === 6;
+const isWeekend = (date: Date): boolean => date.getDay() === 0 || date.getDay() === 6;
 
 // Helper function to check if two dates are the same day
-const isSameDay = (date1, date2) => 
+const isSameDay = (date1: Date, date2: Date): boolean => 
     date1.getFullYear() === date2.getFullYear() &&
     date1.getMonth() === date2.getMonth() &&
     date1.getDate() === date2.getDate();
 
 // Helper function to generate a unique key for a date
-const dateKey = date => `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+const dateKey = (date: Date): string => `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
 
 // Helper function to check if a date is a holiday
-const isHoliday = (date, holidays) => holidays.some(h => isSameDay(h.date, date));
+const isHoliday = (date: Date, holidays: { date: Date }[]): boolean => holidays.some(h => isSameDay(h.date, date));
 
 // Helper function to check if a date is a day off
-const isDayOff = (date, allDaysOffSet) => allDaysOffSet.has(dateKey(date));
+const isDayOff = (date: Date, allDaysOffSet: Set<string>): boolean => allDaysOffSet.has(dateKey(date));
 
 // Helper function to calculate the number of days between two dates
-const daysBetween = (startDate, endDate) => Math.round((endDate - startDate) / MS_IN_A_DAY);
+const daysBetween = (startDate: Date, endDate: Date): number => Math.round((endDate.getTime() - startDate.getTime()) / MS_IN_A_DAY);
 
 // Helper function to format a date
-const formatDate = date => date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+const formatDate = (date: Date): string => date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
 // Get holidays for a specific year and country
-export function getHolidaysForYear(countryCode, year, stateCode = '') {
-    const hd = new Holidays(countryCode, stateCode);
+export function getHolidaysForYear(countryCode: string, year: number, stateCode?: string): { date: Date; name: string }[] {
+    const hd = stateCode ? new Holidays(countryCode, stateCode) : new Holidays(countryCode);
     return hd.getHolidays(year)
         .filter(holiday => holiday.type === 'public')
         .map(holiday => ({
@@ -40,14 +40,9 @@ export function getHolidaysForYear(countryCode, year, stateCode = '') {
 }
 
 // Optimize days off to create the longest possible chains
-export function optimizeDaysOff(holidays, year, daysOff) {
-    // Filter holidays to include only those in the current year
+export function optimizeDaysOff(holidays: { date: Date }[], year: number, daysOff: number): Date[] {
     const currentYearHolidays = holidays.filter(h => h.date.getFullYear() === year);
-
-    // Recalculate weekends for the current year
     const weekends = getWeekends(year);
-
-    // Initialize a new Set for all days off
     const allDaysOffSet = new Set([
         ...currentYearHolidays.map(h => dateKey(h.date)),
         ...weekends.map(d => dateKey(d))
@@ -59,15 +54,15 @@ export function optimizeDaysOff(holidays, year, daysOff) {
 }
 
 // Calculate consecutive days off
-export function calculateConsecutiveDaysOff(holidays, optimizedDaysOff, year) {
+export function calculateConsecutiveDaysOff(holidays: { date: Date }[], optimizedDaysOff: Date[], year: number): { startDate: Date; endDate: Date; usedDaysOff: number; totalDays: number }[] {
     const allDaysOffSet = new Set([...holidays.map(h => dateKey(h.date)), ...optimizedDaysOff.map(d => dateKey(d))]);
-    const consecutiveDaysOff = [];
-    let currentGroup = [];
+    const consecutiveDaysOff: { startDate: Date; endDate: Date; usedDaysOff: number; totalDays: number }[] = [];
+    let currentGroup: Date[] = [];
     
     for (let month = 0; month < 12; month++) {
         for (let day = 1; day <= 31; day++) {
             const date = new Date(year, month, day);
-            if (date.getMonth() !== month) break; // Skip invalid dates
+            if (date.getMonth() !== month) break;
 
             if (isWeekend(date) || isHoliday(date, holidays) || isDayOff(date, allDaysOffSet)) {
                 currentGroup.push(date);
@@ -80,7 +75,6 @@ export function calculateConsecutiveDaysOff(holidays, optimizedDaysOff, year) {
         }
     }
 
-    // Check the last group at the end of the year
     if (currentGroup.length > 2) {
         addConsecutiveDaysOff(consecutiveDaysOff, currentGroup, optimizedDaysOff);
     }
@@ -89,8 +83,8 @@ export function calculateConsecutiveDaysOff(holidays, optimizedDaysOff, year) {
 }
 
 // Get all weekends for a specific year
-function getWeekends(year) {
-    const weekends = [];
+function getWeekends(year: number): Date[] {
+    const weekends: Date[] = [];
     for (let month = 0; month < 12; month++) {
         for (let day = 1; day <= 31; day++) {
             const date = new Date(year, month, day);
@@ -102,9 +96,9 @@ function getWeekends(year) {
 }
 
 // Find gaps between days off
-function findGaps(allDaysOffSet, year) {
-    const gaps = [];
-    let currentGapStart = null;
+function findGaps(allDaysOffSet: Set<string>, year: number): { start: Date; end: Date; gapLength: number }[] {
+    const gaps: { start: Date; end: Date; gapLength: number }[] = [];
+    let currentGapStart: Date | null = null;
 
     for (let month = 0; month < 12; month++) {
         for (let day = 1; day <= 31; day++) {
@@ -137,7 +131,7 @@ function findGaps(allDaysOffSet, year) {
 }
 
 // Rank gaps by efficiency
-function rankGapsByEfficiency(gaps, allDaysOffSet) {
+function rankGapsByEfficiency(gaps: { start: Date; end: Date; gapLength: number }[], allDaysOffSet: Set<string>): any[] {
     return gaps.map(gap => {
         const backward = calculateChain(gap.start, gap.gapLength, allDaysOffSet, 'backward');
         const forward = calculateChain(gap.end, gap.gapLength, allDaysOffSet, 'forward');
@@ -149,7 +143,7 @@ function rankGapsByEfficiency(gaps, allDaysOffSet) {
 }
 
 // Calculate potential chain length and days off used
-function calculateChain(startDate, gapLength, allDaysOffSet, direction) {
+function calculateChain(startDate: Date, gapLength: number, allDaysOffSet: Set<string>, direction: 'backward' | 'forward'): { chainLength: number; usedDaysOff: number } {
     let chainLength = gapLength;
     let usedDaysOff = 0;
     let currentDate = new Date(startDate);
@@ -174,13 +168,12 @@ function calculateChain(startDate, gapLength, allDaysOffSet, direction) {
 }
 
 // Select days off based on ranked gaps
-function selectDaysOff(rankedGaps, daysOff, allDaysOffSet, year) {
-    const selectedDays = [];
+function selectDaysOff(rankedGaps: any[], daysOff: number, allDaysOffSet: Set<string>, year: number): Date[] {
+    const selectedDays: Date[] = [];
 
     while (daysOff > 0 && rankedGaps.length > 0) {
-        const gap = rankedGaps.shift(); // Get the highest-ranked gap
+        const gap = rankedGaps.shift();
 
-        // Determine the direction and starting point for filling the gap
         const increment = gap.fillFrom === 'start' ? 1 : -1;
         const startDate = gap.fillFrom === 'start' ? gap.start : gap.end;
 
@@ -195,7 +188,6 @@ function selectDaysOff(rankedGaps, daysOff, allDaysOffSet, year) {
             }
         }
 
-        // Recalculate gaps and re-rank them after each assignment
         const newGaps = findGaps(allDaysOffSet, year);
         rankedGaps = rankGapsByEfficiency(newGaps, allDaysOffSet);
     }
@@ -204,7 +196,7 @@ function selectDaysOff(rankedGaps, daysOff, allDaysOffSet, year) {
 }
 
 // Add consecutive days off to the list
-function addConsecutiveDaysOff(consecutiveDaysOff, currentGroup, optimizedDaysOff) {
+function addConsecutiveDaysOff(consecutiveDaysOff: { startDate: Date; endDate: Date; usedDaysOff: number; totalDays: number }[], currentGroup: Date[], optimizedDaysOff: Date[]) {
     const startDate = currentGroup[0];
     const endDate = currentGroup[currentGroup.length - 1];
     const totalDays = daysBetween(startDate, endDate) + 1;

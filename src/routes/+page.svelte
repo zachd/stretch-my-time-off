@@ -1,62 +1,62 @@
-<script>
+<script lang="ts">
     import { onMount } from 'svelte';
     import { injectSpeedInsights } from '@vercel/speed-insights';
-    import { inject } from '@vercel/analytics'
+    import { inject } from '@vercel/analytics';
     import countries from 'i18n-iso-countries';
     import enLocale from 'i18n-iso-countries/langs/en.json';
     import CalendarMonth from '../lib/CalendarMonth.svelte';
-    import { getHolidaysForYear, optimizeDaysOff, calculateConsecutiveDaysOff } from '../lib/holidayUtils.js';
-    import { ptoData } from '../lib/ptoData.js';
+    import { getHolidaysForYear, optimizeDaysOff, calculateConsecutiveDaysOff } from '../lib/holidayUtils';
+    import { ptoData } from '../lib/ptoData';
     import Holidays from 'date-holidays';
 
     countries.registerLocale(enLocale);
-    let countriesList = countries.getNames('en');
+    let countriesList: Record<string, string> = countries.getNames('en');
 
-    let year;
-    let months = Array.from({ length: 12 }, (_, i) => i);
-    let selectedCountry = '';
-    let holidays = [];
-    let daysOff = 0;
-    let optimizedDaysOff = [];
-    let consecutiveDaysOff = [];
-    let placeholder = "Country";
-    let countriesInput;
-    let statesInput;
-    let showHowItWorks = false;
+    let year: number;
+    let months: number[] = Array.from({ length: 12 }, (_, i) => i);
+    let selectedCountry: string = '';
+    let holidays: Array<{ date: Date; name: string; hidden?: boolean }> = [];
+    let daysOff: number = 0;
+    let optimizedDaysOff: Date[] = [];
+    let consecutiveDaysOff: Array<{ startDate: Date; endDate: Date; totalDays: number }> = [];
+    let countriesInput: HTMLInputElement | null = null;
+    let statesInput: HTMLInputElement | null = null;
+    let showHowItWorks: boolean = false;
 
     // Default settings
-    let defaultYear = new Date().getFullYear();
-    let defaultCountry = '';
-    let defaultDaysOff = 0;
+    let defaultYear: number = new Date().getFullYear();
+    let defaultCountry: string = '';
+    let defaultDaysOff: number = 0;
 
-    let selectedState = '';
-    let selectedStateCode = '';
-    let statesList = [];
+    let selectedState: string = '';
+    let selectedStateCode: string = '';
+    let statesList: Record<string, string> = {};
 
-    let showHolidaysList = false; // State to toggle the visibility of the holidays list
+    let showHolidaysList: boolean = false;
 
-    $: selectedCountryCode = Object.keys(countriesList).find(code => countriesList[code] === selectedCountry);
+    $: selectedCountryCode = Object.keys(countriesList).find(code => countriesList[code] === selectedCountry) || '';
 
     $: if (selectedCountryCode || selectedStateCode || daysOff || year) {
         updateHolidays();
     }
 
     $: if (daysOff) {
-        localStorage.setItem('daysOff', daysOff);
+        localStorage.setItem('daysOff', daysOff.toString());
     }
 
     $: if (year) {
-        localStorage.setItem('year', year);
+        localStorage.setItem('year', year.toString());
     }
 
-    function updateStatesList(countryCode) {
+    function updateStatesList(countryCode: string) {
         const hd = new Holidays(countryCode);
-        statesList = hd.getStates(countryCode) || [];
+        statesList = hd.getStates(countryCode) || {};
     }
 
-    function handleStateChange(event) {
-        const stateName = event.target.value;
-        selectedStateCode = Object.keys(statesList).find(code => statesList[code] === stateName);
+    function handleStateChange(event: Event) {
+        const target = event.target as HTMLInputElement;
+        const stateName = target.value;
+        selectedStateCode = Object.keys(statesList).find(code => statesList[code] === stateName) || '';
         selectedState = stateName;
         localStorage.setItem('selectedState', selectedState);
         localStorage.setItem('selectedStateCode', selectedStateCode);
@@ -66,11 +66,10 @@
         inject();
         injectSpeedInsights();
 
-        // Always fetch the real country and PTO data
         fetchCountryCode().then(() => {
             defaultYear = new Date().getFullYear();
             defaultCountry = selectedCountry;
-            defaultDaysOff = ptoData[selectedCountryCode];
+            defaultDaysOff = ptoData[selectedCountryCode] || 0;
 
             const storedYear = localStorage.getItem('year');
             const storedCountry = localStorage.getItem('selectedCountry');
@@ -104,8 +103,9 @@
         }
     }
 
-    function handleCountryChange(event) {
-        const fullValue = event.target.value;
+    function handleCountryChange(event: Event) {
+        const target = event.target as HTMLInputElement;
+        const fullValue = target.value;
         if (selectedCountryCode) {
             daysOff = ptoData[selectedCountryCode] || 0;
             selectedState = ''; // Reset state
@@ -114,7 +114,7 @@
             localStorage.setItem('selectedCountry', selectedCountry);
             localStorage.setItem('selectedState', selectedState);
             localStorage.setItem('selectedStateCode', selectedStateCode);
-            localStorage.setItem('daysOff', daysOff);
+            localStorage.setItem('daysOff', daysOff.toString());
         }
     }
 
@@ -124,9 +124,11 @@
             let allHolidays = getHolidaysForYear(selectedCountryCode, year, selectedStateCode);
             holidays = allHolidays.map(holiday => ({
                 ...holiday,
+                date: new Date(holiday.date),
                 hidden: isHolidayHidden(holiday)
             }));
-            const visibleHolidays = holidays.filter(h => !h.hidden);
+            const visibleHolidays = holidays
+                .filter(h => !h.hidden);
             optimizedDaysOff = optimizeDaysOff(visibleHolidays, year, daysOff);
             consecutiveDaysOff = calculateConsecutiveDaysOff(visibleHolidays, optimizedDaysOff, year);
         } else {
@@ -142,14 +144,14 @@
         selectedState = '';
         selectedStateCode = '';
         daysOff = defaultDaysOff;
-        localStorage.setItem('year', year);
+        localStorage.setItem('year', year.toString());
         localStorage.setItem('selectedCountry', selectedCountry);
         localStorage.setItem('selectedState', selectedState);
         localStorage.setItem('selectedStateCode', selectedStateCode);
-        localStorage.setItem('daysOff', daysOff);
+        localStorage.setItem('daysOff', daysOff.toString());
     }
 
-    function handleKeyDown(event) {
+    function handleKeyDown(event: KeyboardEvent) {
         switch (event.key) {
             case 'ArrowRight':
                 event.preventDefault();
@@ -176,8 +178,8 @@
         }
     }
 
-    function adjustInputWidth(inputElement, value) {
-        if (typeof window !== 'undefined' && inputElement) { // Ensure this runs only in the browser
+    function adjustInputWidth(inputElement: HTMLInputElement | null, value: string) {
+        if (typeof window !== 'undefined' && inputElement) {
             const tempSpan = document.createElement('span');
             tempSpan.style.visibility = 'hidden';
             tempSpan.style.position = 'absolute';
@@ -189,15 +191,14 @@
         }
     }
 
-    // Reactive statements to adjust input width when values change
     $: if (countriesInput) adjustInputWidth(countriesInput, selectedCountry);
     $: if (statesInput) adjustInputWidth(statesInput, selectedState);
 
-    function getFlagEmoji(countryCode) {
-        if (!countryCode) return ''; // Return an empty string if countryCode is not available
+    function getFlagEmoji(countryCode: string) {
+        if (!countryCode) return '';
         return countryCode
             .toUpperCase()
-            .replace(/./g, char => String.fromCodePoint(127397 + char.charCodeAt()));
+            .replace(/./g, char => String.fromCodePoint(127397 + char.charCodeAt(0)));
     }
 
     function toggleHowItWorks() {
@@ -210,48 +211,39 @@
         }
     }
 
-    // Function to toggle the visibility of a holiday
-    function toggleHolidayVisibility(holiday) {
-        const countryCode = Object.keys(countriesList).find(code => countriesList[code] === selectedCountry);
-        if (!countryCode) return;
+    function toggleHolidayVisibility(holiday: { date: Date; name: string; hidden?: boolean }) {
+        if (!selectedCountryCode) return;
 
-        const storageKey = `hiddenHolidays_${countryCode}`;
-        let hiddenHolidays = JSON.parse(localStorage.getItem(storageKey)) || {};
+        const storageKey = `hiddenHolidays_${selectedCountryCode}`;
+        let hiddenHolidays = JSON.parse(localStorage.getItem(storageKey) || '{}');
 
-        // Toggle the hidden state of the holiday
-        hiddenHolidays[holiday.date] = !hiddenHolidays[holiday.date];
+        hiddenHolidays[holiday.date.toString()] = !hiddenHolidays[holiday.date.toString()];
         localStorage.setItem(storageKey, JSON.stringify(hiddenHolidays));
 
-        // Update the holidays list to trigger reactivity
         holidays = holidays.map(h => {
             if (h.date === holiday.date) {
-                return { ...h, hidden: hiddenHolidays[h.date] };
+                return { ...h, hidden: hiddenHolidays[h.date.toString()] };
             }
             return h;
         });
 
-        // Recalculate holidays to ensure hidden ones are excluded
         updateHolidays();
     }
 
-    // Function to check if a holiday is hidden
-    function isHolidayHidden(holiday) {
-        const countryCode = Object.keys(countriesList).find(code => countriesList[code] === selectedCountry);
-        if (!countryCode) return false;
+    function isHolidayHidden(holiday: { date: Date; name: string; hidden?: boolean }) {
+        if (!selectedCountryCode) return false;
 
-        const storageKey = `hiddenHolidays_${countryCode}`;
-        const hiddenHolidays = JSON.parse(localStorage.getItem(storageKey)) || {};
+        const storageKey = `hiddenHolidays_${selectedCountryCode}`;
+        const hiddenHolidays = JSON.parse(localStorage.getItem(storageKey) || '{}');
 
-        return hiddenHolidays[holiday.date] || false;
+        return hiddenHolidays[holiday.date.toString()] || false;
     }
 
-    // Function to format the date
-    function formatDate(dateString) {
-        const options = { day: '2-digit', month: 'short', year: 'numeric' };
-        return new Date(dateString).toLocaleDateString('en-GB', options);
+    function formatDate(date: Date) {
+        const options: Intl.DateTimeFormatOptions = { day: '2-digit', month: 'short', year: 'numeric' };
+        return new Date(date).toLocaleDateString('en-GB', options);
     }
 
-    // Reactive statement to calculate the number of visible holidays
     $: visibleHolidaysCount = holidays.filter(h => !h.hidden).length;
 </script>
 
@@ -321,7 +313,7 @@
 
     @media (max-width: 600px) {
         .calendar-grid {
-            grid-template-columns: repeat(2, 1fr); /* Allow 2 columns on smaller screens */
+            grid-template-columns: repeat(2, 1fr);
             gap: 5px;
             padding: 5px;
         }
@@ -400,23 +392,23 @@
 
     button {
         background-color: #333;
-        border-left: 4px solid #111; /* Lighter border on the left */
-        border-top: 4px solid #111; /* Lighter border on the top */
-        border-right: 4px solid #555; /* Darker border on the right */
-        border-bottom: 4px solid #555; /* Darker border on the bottom */
+        border-left: 4px solid #111;
+        border-top: 4px solid #111;
+        border-right: 4px solid #555;
+        border-bottom: 4px solid #555;
         color: #fff;
-        font-size: 0.8em; /* Smaller font size */
+        font-size: 0.8em;
         cursor: pointer;
-        padding: 3px; /* Reduced padding */
-        margin: 0 3px; /* Reduced margin */
-        border-radius: 4px; /* Slightly less rounded edges */
+        padding: 3px;
+        margin: 0 3px;
+        border-radius: 4px;
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
         transition: transform 0.1s;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width: 30px; /* Smaller width */
-        height: 30px; /* Smaller height */
+        width: 30px;
+        height: 30px;
         font-weight: bold;
     }
 
@@ -441,18 +433,6 @@
 
     .flag {
         font-size: 1.5em;
-    }
-
-    .day {
-        aspect-ratio: 1;
-        text-align: center;
-        font-size: 0.6em;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: #ddd;
-        background-color: #222;
-        position: relative;
     }
 
     .how-it-works {
@@ -482,10 +462,22 @@
         text-align: center;
         font-size: 1em;
         transition: color 0.3s;
+        display: block;
+        width: auto;
+        background: none;
+        border: none;
+        padding: 0;
     }
 
     .toggle-text:hover {
         color: #61dafb;
+        background: none;
+        border: none;
+        padding: 0;
+    }
+
+    .toggle-text:focus {
+        outline: none;
     }
 
     .reset-link {
@@ -579,7 +571,7 @@
         <p>
             In 
             <strong>
-                {getFlagEmoji(Object.keys(countriesList).find(code => countriesList[code] === selectedCountry))}
+                {getFlagEmoji(selectedCountryCode)}
                 {#if selectedState}
                     {selectedState}, 
                 {/if}
@@ -594,9 +586,13 @@
     <div class="content-box">
         <p>
             I live in 
-            <span class="flag" style="vertical-align: middle;">{getFlagEmoji(Object.keys(countriesList).find(code => countriesList[code] === selectedCountry))}</span>
+            <span class="flag" style="vertical-align: middle;">{getFlagEmoji(selectedCountryCode)}</span>
             {#if Object.keys(statesList).length > 0}
-                <input bind:this={statesInput} list="states" class="editable-input bold" bind:value={selectedState} on:input={(e) => { handleStateChange(e); }} on:focus={() => { statesInput.value = ''; }} placeholder="State" aria-label="State" />
+                <input bind:this={statesInput} list="states" class="editable-input bold" bind:value={selectedState} 
+                    on:input={(e) => handleStateChange(e)} 
+                    on:focus={(e) => { (e.target as HTMLInputElement).value = ''; }} 
+                    placeholder="State" 
+                    aria-label="State" />
                 <datalist id="states">
                     {#each Object.entries(statesList) as [code, name]}
                         <option value={name}>{name}</option>
@@ -604,7 +600,11 @@
                 </datalist>
                 in
             {/if}
-            <input bind:this={countriesInput} list="countries" class="editable-input bold" bind:value={selectedCountry} placeholder={placeholder} on:input={(e) => { handleCountryChange(e); }} on:focus={() => { countriesInput.value = ''; }} aria-label="Select country" />
+            <input bind:this={countriesInput} list="countries" class="editable-input bold" bind:value={selectedCountry} 
+                on:input={(e) => handleCountryChange(e)} 
+                on:focus={(e) => { (e.target as HTMLInputElement).value = ''; }} 
+                placeholder="Country" 
+                aria-label="Select country" />
             and have 
             <span class="arrow-controls">
                 <button on:click={() => { if (daysOff > 0) { daysOff--; updateHolidays(); } }} aria-label="Decrease days off">▼</button>
@@ -682,15 +682,15 @@
         </div>
     </div>
 
-    <div class="toggle-text" on:click={toggleHowItWorks}>
+    <button type="button" class="toggle-text" on:click={toggleHowItWorks}>
         {showHowItWorks ? 'Hide Details' : 'How does this work?'}
-    </div>
+    </button>
 
     {#if showHowItWorks}
     <div id="how-it-works" class="content-box how-it-works">
         <h3>How does this work?</h3>
         <p>
-            This tool detects your country from your IP, uses a default number of government-mandated days off from <a href="https://en.wikipedia.org/wiki/List_of_minimum_annual_leave_by_country" target="_blank" rel="noopener noreferrer">Wikipedia</a>, and a <a href={`https://github.com/commenthol/date-holidays/blob/master/data/countries/${Object.keys(countriesList).find(code => countriesList[code] === selectedCountry)}.yaml`} target="_blank" rel="noopener noreferrer">list of holidays</a> for {selectedCountry}.
+            This tool detects your country from your IP, uses a default number of government-mandated days off from <a href="https://en.wikipedia.org/wiki/List_of_minimum_annual_leave_by_country" target="_blank" rel="noopener noreferrer">Wikipedia</a>, and a <a href={`https://github.com/commenthol/date-holidays/blob/master/data/countries/${selectedCountryCode}.yaml`} target="_blank" rel="noopener noreferrer">list of holidays</a> for {selectedCountry}.
         </p>
         <p>
             The algorithm prioritizes filling the shortest gaps first. It optimizes for spreading your holidays throughout the year to create the most number of consecutive vacation periods.

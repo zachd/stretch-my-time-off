@@ -1,16 +1,15 @@
-<script>
+<script lang="ts">
     import Tooltip from './Tooltip.svelte';
 
-    export let year;
-    export let month;
-    export let holidays = [];
-    export let optimizedDaysOff = [];
-    export let consecutiveDaysOff = [];
-    export let selectedCountryCode;
+    export let year: number;
+    export let month: number;
+    export let holidays: Array<{ date: Date; name: string; hidden?: boolean }>;
+    export let optimizedDaysOff: Date[];
+    export let consecutiveDaysOff: Array<{ startDate: Date; endDate: Date; totalDays: number }>;
+    export let selectedCountryCode: string;
 
     // Function to determine the first day of the week based on locale
-    function getFirstDayOfWeek(locale) {
-        // Convert 'us' to proper locale format
+    function getFirstDayOfWeek(locale: string): number {
         const normalizedLocale = locale.toLowerCase() === 'us' ? 'en-US' : `en-${locale.toUpperCase()}`;
     
         try {
@@ -34,15 +33,15 @@
     $: firstDayOfWeek = getFirstDayOfWeek(locale);
     $: adjustedFirstDay = (getFirstDayOfMonth(year, month) - firstDayOfWeek + 7) % 7;
 
-    function getDaysInMonth(year, month) {
+    function getDaysInMonth(year: number, month: number): number {
         return new Date(year, month + 1, 0).getDate();
     }
 
-    function getFirstDayOfMonth(year, month) {
+    function getFirstDayOfMonth(year: number, month: number): number {
         return new Date(year, month, 1).getDay();
     }
 
-    function getHoliday(day) {
+    function getHoliday(day: number): { date: Date; name: string; hidden?: boolean } | undefined {
         return holidays.find(holiday => 
             holiday.date.getFullYear() === year &&
             holiday.date.getMonth() === month &&
@@ -50,7 +49,7 @@
         );
     }
 
-    function isOptimizedDayOff(day) {
+    function isOptimizedDayOff(day: number): boolean {
         return optimizedDaysOff.some(date => 
             date.getFullYear() === year &&
             date.getMonth() === month &&
@@ -58,8 +57,7 @@
         );
     }
 
-    // Determine the dominant month for each consecutive days off period
-    function getDominantMonth(period) {
+    function getDominantMonth(period: { startDate: Date; endDate: Date }): number {
         const startMonth = period.startDate.getMonth();
         const endMonth = period.endDate.getMonth();
 
@@ -73,7 +71,7 @@
         return startDays > endDays ? startMonth : endMonth;
     }
 
-    function isConsecutiveDayOff(day) {
+    function isConsecutiveDayOff(day: number): boolean {
         return consecutiveDaysOff.some(period => {
             const start = period.startDate;
             const end = period.endDate;
@@ -82,26 +80,21 @@
         });
     }
 
-    // Function to determine if a day is a weekend
-    function isWeekend(day) {
+    function isWeekend(day: number): boolean {
         const dayOfWeek = (adjustedFirstDay + day - 1) % 7;
-        // Calculate the indices for Saturday and Sunday
         const saturdayIndex = (6 - firstDayOfWeek + 7) % 7;
         const sundayIndex = (7 - firstDayOfWeek + 7) % 7;
         return dayOfWeek === saturdayIndex || dayOfWeek === sundayIndex;
     }
 
-    // Fixed array of day initials starting from Sunday
     const dayInitials = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
-    // Reactive declaration to get the ordered day initials
     $: orderedDayInitials = dayInitials.slice(firstDayOfWeek).concat(dayInitials.slice(0, firstDayOfWeek));
 </script>
 
 <div class="calendar">
     <div class="month-name">{new Date(year, month).toLocaleString('default', { month: 'long' })}</div>
     
-    <!-- Day initials header -->
     {#each orderedDayInitials as dayInitial}
         <div class="day-initial">{dayInitial}</div>
     {/each}
@@ -113,7 +106,7 @@
         <div class="day {isWeekend(day) ? 'weekend' : ''} {getHoliday(day) ? 'holiday' : ''} {isOptimizedDayOff(day) ? 'optimized' : ''} {isConsecutiveDayOff(day) ? 'consecutive-day' : ''}">
             {day}
             {#if getHoliday(day)}
-                <Tooltip text={getHoliday(day).name} />
+                <Tooltip text={getHoliday(day)?.name} />
             {/if}
         </div>
     {/each}
