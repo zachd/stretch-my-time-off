@@ -35,6 +35,12 @@
 
     let showHolidaysList = false; // State to toggle the visibility of the holidays list
 
+    $: selectedCountryCode = Object.keys(countriesList).find(code => countriesList[code] === selectedCountry);
+
+    $: if (selectedCountryCode || selectedStateCode || daysOff) {
+        updateHolidays();
+    }
+
     function updateStatesList(countryCode) {
         const hd = new Holidays(countryCode);
         statesList = hd.getStates(countryCode) || [];
@@ -44,7 +50,6 @@
         const stateName = event.target.value;
         selectedStateCode = Object.keys(statesList).find(code => statesList[code] === stateName);
         selectedState = stateName;
-        updateHolidays();
         localStorage.setItem('selectedState', selectedState);
         localStorage.setItem('selectedStateCode', selectedStateCode);
     }
@@ -70,13 +75,12 @@
             daysOff = storedDaysOff ? parseInt(storedDaysOff, 10) : defaultDaysOff;
             selectedState = storedState || '';
             selectedStateCode = storedStateCode || '';
-            updateHolidays();
         });
 
-        const countryCode = Object.keys(countriesList).find(code => countriesList[code] === selectedCountry);
-        if (countryCode) {
-            updateStatesList(countryCode);
+        if (selectedCountryCode) {
+            updateStatesList(selectedCountryCode);
         }
+        window.addEventListener('keydown', handleKeyDown);
     });
 
     async function fetchCountryCode() {
@@ -94,14 +98,11 @@
 
     function handleCountryChange(event) {
         const fullValue = event.target.value;
-        const countryCode = Object.keys(countriesList).find(code => countriesList[code] === fullValue);
-        if (countryCode) {
-            selectedCountry = fullValue;
-            daysOff = ptoData[countryCode] || 0;
+        if (selectedCountryCode) {
+            daysOff = ptoData[selectedCountryCode] || 0;
             selectedState = ''; // Reset state
             selectedStateCode = ''; // Reset state code
-            updateStatesList(countryCode); // Update states list for the new country
-            updateHolidays();
+            updateStatesList(selectedCountryCode); // Update states list for the new country
             localStorage.setItem('selectedCountry', selectedCountry);
             localStorage.setItem('selectedState', selectedState);
             localStorage.setItem('selectedStateCode', selectedStateCode);
@@ -110,15 +111,13 @@
     }
 
     function updateHolidays() {
-        const countryCode = Object.keys(countriesList).find(code => countriesList[code] === selectedCountry);
-        if (countryCode) {
-            updateStatesList(countryCode);
-            let allHolidays = getHolidaysForYear(countryCode, year, selectedStateCode);
+        if (selectedCountryCode) {
+            updateStatesList(selectedCountryCode);
+            let allHolidays = getHolidaysForYear(selectedCountryCode, year, selectedStateCode);
             holidays = allHolidays.map(holiday => ({
                 ...holiday,
                 hidden: isHolidayHidden(holiday)
             }));
-            // Filter out hidden holidays for calculations
             const visibleHolidays = holidays.filter(h => !h.hidden);
             optimizedDaysOff = optimizeDaysOff(visibleHolidays, year, daysOff);
             consecutiveDaysOff = calculateConsecutiveDaysOff(visibleHolidays, optimizedDaysOff, year);
@@ -142,7 +141,6 @@
         localStorage.setItem('selectedState', selectedState);
         localStorage.setItem('selectedStateCode', selectedStateCode);
         localStorage.setItem('daysOff', daysOff);
-        updateHolidays();
     }
 
     function handleKeyDown(event) {
@@ -665,7 +663,14 @@
         <div class="calendar-grid">
             {#each months as month}
                 <div class="calendar-container">
-                    <CalendarMonth {year} {month} {holidays} {optimizedDaysOff} {consecutiveDaysOff} />
+                    <CalendarMonth
+                        year={year}
+                        month={month}
+                        holidays={holidays}
+                        optimizedDaysOff={optimizedDaysOff}
+                        consecutiveDaysOff={consecutiveDaysOff}
+                        selectedCountryCode={selectedCountryCode}
+                    />
                 </div>
             {/each}
         </div>

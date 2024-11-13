@@ -6,10 +6,33 @@
     export let holidays = [];
     export let optimizedDaysOff = [];
     export let consecutiveDaysOff = [];
+    export let selectedCountryCode;
+
+    // Function to determine the first day of the week based on locale
+    function getFirstDayOfWeek(locale) {
+        // Convert 'us' to proper locale format
+        const normalizedLocale = locale.toLowerCase() === 'us' ? 'en-US' : `en-${locale.toUpperCase()}`;
+    
+        try {
+            // Try to get firstDay from Intl.Locale weekInfo
+            // @ts-ignore .weekInfo exists on all browsers except Firefox
+            const weekFirstDay = new Intl.Locale(normalizedLocale)?.weekInfo?.firstDay;
+            if (weekFirstDay !== undefined) {
+                return weekFirstDay;
+            }
+        } catch (e) {
+            // Fallback if weekInfo is not supported
+        }
+
+        // Fallback: US starts on Sunday (0), most others on Monday (1)
+        return normalizedLocale === 'en-US' ? 0 : 1;
+    }
 
     // Reactive declarations
     $: daysInMonth = getDaysInMonth(year, month);
-    $: firstDay = getFirstDayOfMonth(year, month);
+    $: locale = selectedCountryCode ? new Intl.Locale(selectedCountryCode).toString() : 'us';
+    $: firstDayOfWeek = getFirstDayOfWeek(locale);
+    $: adjustedFirstDay = (getFirstDayOfMonth(year, month) - firstDayOfWeek + 7) % 7;
 
     function getDaysInMonth(year, month) {
         return new Date(year, month + 1, 0).getDate();
@@ -58,15 +81,45 @@
             return date >= start && date <= end;
         });
     }
+
+    // Function to determine if a day is a weekend
+    function isWeekend(day) {
+        const dayOfWeek = (adjustedFirstDay + day - 1) % 7;
+        // Calculate the indices for Saturday and Sunday
+        const saturdayIndex = (6 - firstDayOfWeek + 7) % 7;
+        const sundayIndex = (7 - firstDayOfWeek + 7) % 7;
+        return dayOfWeek === saturdayIndex || dayOfWeek === sundayIndex;
+    }
+
+    // Function to get the localized day initials based on the first day of the week
+    function getLocalizedDayInitials(locale) {
+        const formatter = new Intl.DateTimeFormat(locale, { weekday: 'short' });
+        const dayInitials = [];
+        for (let i = 0; i < 7; i++) {
+            const date = new Date(Date.UTC(2021, 0, i + 3)); // Start from a known Thursday to ensure full week coverage
+            const dayName = formatter.format(date);
+            dayInitials.push(dayName.charAt(0).toUpperCase());
+        }
+        return dayInitials;
+    }
+
+    // Reactive declaration to get the ordered day initials
+    $: orderedDayInitials = getLocalizedDayInitials(locale).slice(firstDayOfWeek).concat(getLocalizedDayInitials(locale).slice(0, firstDayOfWeek));
 </script>
 
 <div class="calendar">
     <div class="month-name">{new Date(year, month).toLocaleString('default', { month: 'long' })}</div>
-    {#each Array.from({ length: firstDay }) as _}
+    
+    <!-- Day initials header -->
+    {#each orderedDayInitials as dayInitial}
+        <div class="day-initial">{dayInitial}</div>
+    {/each}
+
+    {#each Array.from({ length: adjustedFirstDay }) as _}
         <div class="day"></div>
     {/each}
     {#each Array.from({ length: daysInMonth }, (_, i) => i + 1) as day}
-        <div class="day {(firstDay + day - 1) % 7 === 0 || (firstDay + day - 1) % 7 === 6 ? 'weekend' : ''} {getHoliday(day) ? 'holiday' : ''} {isOptimizedDayOff(day) ? 'optimized' : ''} {isConsecutiveDayOff(day) ? 'consecutive-day' : ''}">
+        <div class="day {isWeekend(day) ? 'weekend' : ''} {getHoliday(day) ? 'holiday' : ''} {isOptimizedDayOff(day) ? 'optimized' : ''} {isConsecutiveDayOff(day) ? 'consecutive-day' : ''}">
             {day}
             {#if getHoliday(day)}
                 <Tooltip text={getHoliday(day).name} />
@@ -95,6 +148,12 @@
         box-sizing: border-box;
         width: 100%;
         height: auto;
+    }
+    .day-initial {
+        text-align: center;
+        font-weight: bold;
+        color: #c5c6c7;
+        font-size: 0.6em;
     }
     .day {
         aspect-ratio: 1;
