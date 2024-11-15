@@ -30,7 +30,11 @@ const formatDate = (date: Date): string => date.toLocaleDateString('en-US', { mo
 
 // Get holidays for a specific year and country
 export function getHolidaysForYear(countryCode: string, year: number, stateCode?: string): { date: Date; name: string }[] {
-    const hd = stateCode ? new Holidays(countryCode, stateCode) : new Holidays(countryCode);
+    // The date-holidays lib has translations for many holidays, but defaults to using the language of the country.
+    // We can pass in the browser's preferred languages (though the lib doesn't fall back, e.g. from `de-AT` to `de`)
+    const languages = navigator.languages.map(lang => lang.split('-')[0]);
+    const opts = { languages }
+    const hd = stateCode ? new Holidays(countryCode, stateCode, opts) : new Holidays(countryCode, opts);
     return hd.getHolidays(year)
         .filter(holiday => holiday.type === 'public')
         .map(holiday => ({
