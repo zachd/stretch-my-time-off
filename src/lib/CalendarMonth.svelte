@@ -132,13 +132,17 @@
         box-sizing: border-box;
         width: 100%;
         height: auto;
+        background-color: var(--content-bg);
+        color: var(--text-color);
     }
+
     .day-initial {
         text-align: center;
         font-weight: bold;
-        color: #c5c6c7;
+        color: var(--text-color);
         font-size: 0.6em;
     }
+
     .day {
         aspect-ratio: 1;
         text-align: center;
@@ -146,47 +150,59 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        color: #ddd;
-        background-color: #222;
+        color: var(--text-color);
+        background-color: var(--content-bg);
         position: relative;
+        border: 1px solid var(--border-color);
     }
+
     .day:hover {
         :global(.tooltip) {
             opacity: 1;
             pointer-events: auto;
         }
     }
+
     .weekend {
-        background-color: #585858;
+        background-color: var(--calendar-weekend);
     }
+
     .optimized {
-        background-color: #4caf50;
+        background-color: var(--calendar-optimized);
+        color: var(--bg-color);
     }
+
     .holiday {
-        background-color: #3b1e6e;
+        background-color: var(--calendar-holiday);
         cursor: pointer;
+        color: var(--bg-color);
     }
+
     .consecutive-day {
-        border: 1px solid rgba(255, 255, 255, 0.7);
+        border: 1px solid var(--border-color);
     }
+
     .month-name {
         grid-column: span 7;
         text-align: center;
         letter-spacing: 0.1em;
         font-size: 1em;
         text-transform: uppercase;
-        color: #c5c6c7;
+        color: var(--text-color);
         margin-bottom: 5px;
     }
+
     .consecutive-days-off {
         margin-top: 10px;
-        color: #fff;
+        color: var(--text-color);
     }
+
     .consecutive-days-off ul {
         list-style: none;
         padding: 0;
         margin: 0;
     }
+
     .consecutive-days-off li {
         font-size: 1em;
     }

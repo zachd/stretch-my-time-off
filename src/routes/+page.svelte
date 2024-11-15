@@ -8,6 +8,7 @@
     import { getHolidaysForYear, optimizeDaysOff, calculateConsecutiveDaysOff } from '../lib/holidayUtils';
     import { ptoData } from '../lib/ptoData';
     import Holidays from 'date-holidays';
+    import ThemeToggle from '../lib/components/ThemeToggle.svelte';
 
     countries.registerLocale(enLocale);
     let countriesList: Record<string, string> = countries.getNames('en');
@@ -248,25 +249,50 @@
 </script>
 
 <style>
-    .header {
-        max-width: 800px;
-        margin: 20px auto;
-        padding: 0 30px;
-        text-align: center;
+    :global(:root) {
+        --bg-color: #000;
+        --content-bg: #111;
+        --text-color: #fff;
+        --border-color: #555;
+        --hover-bg: rgba(255, 255, 255, 0.1);
+        --button-bg: #333;
+        --button-border-dark: #111;
+        --button-border-light: #555;
+        --calendar-weekend: #585858;
+        --calendar-optimized: #4caf50;
+        --calendar-holiday: #3b1e6e;
+        --link-color: #66fcf1;
+        --shadow-color: rgba(0, 0, 0, 0.2);
     }
 
-    .header h2 {
-        font-size: 2.3rem;
-        margin: 0;
+    :global(.light-theme) {
+        --bg-color: #fff;
+        --content-bg: #f5f5f5;
+        --text-color: #333;
+        --border-color: #ddd;
+        --hover-bg: rgba(0, 0, 0, 0.1);
+        --button-bg: #e0e0e0;
+        --button-border-dark: #ccc;
+        --button-border-light: #fff;
+        --calendar-weekend: #e0e0e0;
+        --calendar-optimized: #81c784;
+        --calendar-holiday: #9575cd;
+        --link-color: #2196f3;
+        --shadow-color: rgba(0, 0, 0, 0.1);
+    }
+
+    :global(body) {
+        background-color: var(--bg-color);
+        color: var(--text-color);
     }
 
     .content-box {
         max-width: 1200px;
         margin: 20px auto;
         padding: 15px;
-        background-color: #111;
+        background-color: var(--content-bg);
         border-radius: 8px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        box-shadow: 0 4px 12px var(--shadow-color);
         overflow: hidden;
     }
 
@@ -322,12 +348,12 @@
     .calendar-container {
         width: 100%;
         max-width: 300px;
-        background-color: #111;
-        color: #fff;
+        background-color: var(--content-bg);
+        color: var(--text-color);
         border-radius: 5px;
         padding: 10px;
         box-sizing: border-box;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        box-shadow: 0 2px 4px var(--shadow-color);
         overflow: visible;
         display: flex;
         flex-direction: column;
@@ -357,26 +383,26 @@
     }
 
     .color-box.weekend {
-        background-color: #585858;
+        background-color: var(--calendar-weekend);
     }
 
     .color-box.optimized {
-        background-color: #4caf50;
+        background-color: var(--calendar-optimized);
     }
 
     .color-box.holiday {
-        background-color: #3b1e6e;
+        background-color: var(--calendar-holiday);
     }
 
     footer {
         text-align: center;
         padding: 10px;
-        color: #c5c6c7;
+        color: var(--text-color);
         font-size: 0.8em;
     }
 
     a {
-        color: #66fcf1;
+        color: var(--link-color);
         text-decoration: none;
     }
 
@@ -438,10 +464,10 @@
     .how-it-works {
         margin: 20px auto;
         padding: 25px;
-        background-color: #111;
-        color: #fff;
+        background-color: var(--content-bg);
+        color: var(--text-color);
         border-radius: 8px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        box-shadow: 0 4px 12px var(--shadow-color);
         transition: max-height 0.3s ease;
         overflow: hidden;
     }
@@ -470,7 +496,7 @@
     }
 
     .toggle-text:hover {
-        color: #61dafb;
+        color: var(--link-color);
         background: none;
         border: none;
         padding: 0;
@@ -509,16 +535,16 @@
 
     .content-box button {
         margin-left: 10px;
-        background-color: #444;
+        background-color: var(--button-bg);
         border: none;
-        color: #fff;
+        color: var(--text-color);
         padding: 5px 10px;
         cursor: pointer;
         border-radius: 5px;
     }
 
     .content-box button:hover {
-        background-color: #555;
+        background-color: var(--hover-bg);
     }
 
     .strikethrough {
@@ -552,20 +578,44 @@
 
     .holidays-list button {
         margin-left: 10px;
-        background-color: #444;
+        background-color: var(--button-bg);
         border: none;
-        color: #fff;
+        color: var(--text-color);
         padding: 5px 25px;
         cursor: pointer;
         border-radius: 5px;
     }
 
     .holidays-list button:hover {
-        background-color: #555;
+        background-color: var(--hover-bg);
+    }
+
+    .header {
+        max-width: 800px;
+        margin: 20px auto;
+        padding: 0 30px;
+        text-align: center;
+        color: var(--text-color);
+    }
+
+    .header h2 {
+        font-size: 2.3rem;
+        margin: 0;
+        color: var(--text-color);
+    }
+
+    .header p {
+        color: var(--text-color);
+        line-height: 1.6;
+    }
+
+    .header strong {
+        color: var(--text-color);
     }
 </style>
 
 <main>
+    <ThemeToggle />
     <div class="header">
         <h2>🌴 Stretch&nbsp;My Time&nbsp;Off</h2>
         <p>
