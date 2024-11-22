@@ -30,13 +30,21 @@ const formatDate = (date: Date): string => date.toLocaleDateString('en-US', { mo
 
 // Get holidays for a specific year and country
 export function getHolidaysForYear(countryCode: string, year: number, stateCode?: string): { date: Date; name: string }[] {
-    const hd = stateCode ? new Holidays(countryCode, stateCode) : new Holidays(countryCode);
+    // The date-holidays lib has translations for many holidays, but defaults to using the language of the country.
+    // We can pass in the browser's preferred languages (though the lib doesn't fall back, e.g. from `de-AT` to `de`)
+    const languages = navigator.languages.map(lang => lang.split('-')[0]);
+    // Start/end dates are returned in that country/state's time zone, so we need to provide our time zone to localise
+    const opts = { languages, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone };
+    const hd = stateCode ? new Holidays(countryCode, stateCode, opts) : new Holidays(countryCode, opts);
     return hd.getHolidays(year)
         .filter(holiday => holiday.type === 'public')
-        .map(holiday => ({
-            date: new Date(holiday.date),
-            name: holiday.name
-        }));
+        .flatMap(holiday =>
+            // To handle single- and multi-day holidays, we generate a holiday entry for each day in the period
+            Array.from({ length: daysBetween(holiday.start, holiday.end) }, (_, i) => ({
+                date: new Date(holiday.start.getFullYear(), holiday.start.getMonth(), holiday.start.getDate() + i),
+                name: holiday.name,
+            }))
+        );
 }
 
 // Optimize days off to create the longest possible chains
