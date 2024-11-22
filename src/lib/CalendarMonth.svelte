@@ -7,13 +7,13 @@
     export let optimizedDaysOff: Date[];
     export let consecutiveDaysOff: Array<{ startDate: Date; endDate: Date; totalDays: number }>;
     export let selectedCountryCode: string;
+    export let weekendDays: number[] = [6, 0];
 
     // Function to determine the first day of the week based on locale
     function getFirstDayOfWeek(locale: string): number {
         const normalizedLocale = locale.toLowerCase() === 'us' ? 'en-US' : `en-${locale.toUpperCase()}`;
     
         try {
-            // Try to get firstDay from Intl.Locale weekInfo
             // @ts-ignore .weekInfo exists on all browsers except Firefox
             const weekFirstDay = new Intl.Locale(normalizedLocale)?.weekInfo?.firstDay;
             if (weekFirstDay !== undefined) {
@@ -80,11 +80,8 @@
         });
     }
 
-    function isWeekend(day: number): boolean {
-        const dayOfWeek = (adjustedFirstDay + day - 1) % 7;
-        const saturdayIndex = (6 - firstDayOfWeek + 7) % 7;
-        const sundayIndex = (7 - firstDayOfWeek + 7) % 7;
-        return dayOfWeek === saturdayIndex || dayOfWeek === sundayIndex;
+    function isWeekend(date: Date): boolean {
+        return weekendDays.includes(date.getDay());
     }
 
     const dayInitials = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -103,10 +100,11 @@
         <div class="day"></div>
     {/each}
     {#each Array.from({ length: daysInMonth }, (_, i) => i + 1) as day}
-        <div class="day {isWeekend(day) ? 'weekend' : ''} {getHoliday(day) ? 'holiday' : ''} {isOptimizedDayOff(day) ? 'optimized' : ''} {isConsecutiveDayOff(day) ? 'consecutive-day' : ''}">
-            {day}
-            {#if getHoliday(day)}
-                <Tooltip text={getHoliday(day)?.name} />
+        {@const holiday = getHoliday(day)}
+        <div class="day {isWeekend(new Date(year, month, day)) ? 'weekend' : ''} {holiday ? 'holiday' : ''} {isOptimizedDayOff(day) ? 'optimized' : ''} {isConsecutiveDayOff(day) ? 'consecutive-day' : ''}">
+            <span class={holiday?.hidden ? 'strikethrough' : ''}>{day}</span>
+            {#if holiday}
+                <Tooltip text={holiday.name} />
             {/if}
         </div>
     {/each}
@@ -198,5 +196,10 @@
         .consecutive-days-off li {
             font-size: 0.8em;
         }
+    }
+
+    .strikethrough {
+        text-decoration: line-through;
+        opacity: 0.5;
     }
 </style> 
