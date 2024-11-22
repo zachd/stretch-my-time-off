@@ -253,7 +253,6 @@
     $: visibleHolidaysCount = holidays.filter(h => !h.hidden).length;
 
     function toggleWeekendDay(dayNumber: number) {
-        console.log('Toggling weekend day:', dayNumber);
         if (weekendDays.includes(dayNumber)) {
             weekendDays = weekendDays.filter(d => d !== dayNumber);
         } else {

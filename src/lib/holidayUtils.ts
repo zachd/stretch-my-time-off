@@ -56,14 +56,14 @@ export function calculateConsecutiveDaysOff(holidays: { date: Date }[], optimize
         if (isWeekend(d, weekendDays) || isHoliday(d, holidays) || allDaysOff.has(dateKey(d))) {
             currentGroup.push(new Date(d));
         } else if (currentGroup.length > 0) {
-            if (hasWeekendAndNonWeekendHoliday(currentGroup, weekendDays, holidays, optimizedDaysOff)) {
+            if (isValidConsecutiveGroup(currentGroup, weekendDays)) {
                 consecutiveDaysOff.push(createPeriod(currentGroup, optimizedDaysOff));
             }
             currentGroup = [];
         }
     }
 
-    if (currentGroup.length > 0 && hasWeekendAndNonWeekendHoliday(currentGroup, weekendDays, holidays, optimizedDaysOff)) {
+    if (currentGroup.length > 0 && isValidConsecutiveGroup(currentGroup, weekendDays)) {
         consecutiveDaysOff.push(createPeriod(currentGroup, optimizedDaysOff));
     }
 
@@ -162,10 +162,16 @@ function selectDaysOff(rankedGaps: any[], daysOff: number, allDaysOff: Set<strin
     return selectedDays;
 }
 
-// Check if a group contains both a weekend day and a non-weekend holiday/PTO day
-function hasWeekendAndNonWeekendHoliday(group: Date[], weekendDays: number[], holidays: { date: Date }[], optimizedDaysOff: Date[]) {
-    return group.some(d => weekendDays.includes(d.getDay())) &&
-           group.some(d => !weekendDays.includes(d.getDay()) && (isHoliday(d, holidays) || optimizedDaysOff.some(od => dateKey(od) === dateKey(d))));
+// Check if a group is valid (2+ days, not just weekends)
+function isValidConsecutiveGroup(group: Date[], weekendDays: number[]): boolean {
+    // Must be at least 2 days
+    if (group.length < 2) return false;
+
+    // Check if ALL days are weekends
+    const allDaysAreWeekends = group.every(d => weekendDays.includes(d.getDay()));
+
+    // Valid if not all days are weekends
+    return !allDaysAreWeekends;
 }
 
 // Create a period object from a group of consecutive days
