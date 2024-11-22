@@ -36,6 +36,7 @@ export function getHolidaysForYear(countryCode: string, year: number, stateCode?
     // Start/end dates are returned in that country/state's time zone, so we need to provide our time zone to localise
     const opts = { languages, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone };
     const hd = stateCode ? new Holidays(countryCode, stateCode, opts) : new Holidays(countryCode, opts);
+    console.log(hd.getHolidays(year));
     return hd.getHolidays(year)
         .filter(holiday => holiday.type === 'public')
         .flatMap(holiday =>
@@ -44,7 +45,8 @@ export function getHolidaysForYear(countryCode: string, year: number, stateCode?
                 date: new Date(holiday.start.getFullYear(), holiday.start.getMonth(), holiday.start.getDate() + i),
                 name: holiday.name,
             }))
-        );
+        )
+        .sort((holiday1, holiday2) => holiday1.date.getTime() - holiday2.date.getTime() || holiday1.name.localeCompare(holiday2.name));
 }
 
 // Optimize days off to create the longest possible chains
