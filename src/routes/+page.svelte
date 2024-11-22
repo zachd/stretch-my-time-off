@@ -253,6 +253,7 @@
     $: visibleHolidaysCount = holidays.filter(h => !h.hidden).length;
 
     function toggleWeekendDay(dayNumber: number) {
+        console.log('Toggling weekend day:', dayNumber);
         if (weekendDays.includes(dayNumber)) {
             weekendDays = weekendDays.filter(d => d !== dayNumber);
         } else {
@@ -554,7 +555,6 @@
     .content-box li {
         display: flex;
         align-items: center;
-        margin-bottom: 10px;
     }
 
     .content-box button {
@@ -603,7 +603,7 @@
         justify-content: space-between;
         padding: 8px;
         border-radius: 4px;
-        gap: 10px;
+        gap: 5px;
     }
 
     .holidays-list li:hover {
@@ -712,15 +712,6 @@
         <div class="calendar-key">
             <div class="key-item">
                 <div class="key-label">
-                    <span class="color-box weekend"></span>
-                    <span>Weekend</span>
-                </div>
-                <a href="#" on:click|preventDefault={() => showWeekendSettings = !showWeekendSettings} class="edit-link">
-                    (edit)
-                </a>
-            </div>
-            <div class="key-item">
-                <div class="key-label">
                     <span class="color-box optimized"></span>
                     <span>Day Off</span>
                 </div>
@@ -735,6 +726,15 @@
                         (edit)
                     </a>
                 {/if}
+            </div>
+            <div class="key-item">
+                <div class="key-label">
+                    <span class="color-box weekend"></span>
+                    <span>Weekend</span>
+                </div>
+                <a href="#" on:click|preventDefault={() => showWeekendSettings = !showWeekendSettings} class="edit-link">
+                    (edit)
+                </a>
             </div>
         </div>
 

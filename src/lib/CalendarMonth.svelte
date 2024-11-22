@@ -14,7 +14,6 @@
         const normalizedLocale = locale.toLowerCase() === 'us' ? 'en-US' : `en-${locale.toUpperCase()}`;
     
         try {
-            // Try to get firstDay from Intl.Locale weekInfo
             // @ts-ignore .weekInfo exists on all browsers except Firefox
             const weekFirstDay = new Intl.Locale(normalizedLocale)?.weekInfo?.firstDay;
             if (weekFirstDay !== undefined) {
@@ -101,10 +100,11 @@
         <div class="day"></div>
     {/each}
     {#each Array.from({ length: daysInMonth }, (_, i) => i + 1) as day}
-        <div class="day {isWeekend(new Date(year, month, day)) ? 'weekend' : ''} {getHoliday(day) ? 'holiday' : ''} {isOptimizedDayOff(day) ? 'optimized' : ''} {isConsecutiveDayOff(day) ? 'consecutive-day' : ''}">
-            {day}
-            {#if getHoliday(day)}
-                <Tooltip text={getHoliday(day)?.name} />
+        {@const holiday = getHoliday(day)}
+        <div class="day {isWeekend(new Date(year, month, day)) ? 'weekend' : ''} {holiday ? 'holiday' : ''} {isOptimizedDayOff(day) ? 'optimized' : ''} {isConsecutiveDayOff(day) ? 'consecutive-day' : ''}">
+            <span class={holiday?.hidden ? 'strikethrough' : ''}>{day}</span>
+            {#if holiday}
+                <Tooltip text={holiday.name} />
             {/if}
         </div>
     {/each}
@@ -196,5 +196,10 @@
         .consecutive-days-off li {
             font-size: 0.8em;
         }
+    }
+
+    .strikethrough {
+        text-decoration: line-through;
+        opacity: 0.5;
     }
 </style> 
