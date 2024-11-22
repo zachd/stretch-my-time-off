@@ -1,7 +1,5 @@
 <script lang="ts">
     import { onMount } from 'svelte';
-    import { injectSpeedInsights } from '@vercel/speed-insights';
-    import { inject } from '@vercel/analytics';
     import countries from 'i18n-iso-countries';
     import enLocale from 'i18n-iso-countries/langs/en.json';
     import CalendarMonth from '../lib/CalendarMonth.svelte';
@@ -34,6 +32,9 @@
 
     let showHolidaysList: boolean = false;
 
+    let showWeekendSettings: boolean = false;
+    let weekendDays: number[] = [];
+
     $: selectedCountryCode = Object.keys(countriesList).find(code => countriesList[code] === selectedCountry) || '';
 
     $: if (selectedCountryCode || selectedStateCode || daysOff || year) {
@@ -63,8 +64,6 @@
     }
 
     onMount(() => {
-        inject();
-        injectSpeedInsights();
 
         fetchCountryCode().then(() => {
             defaultYear = new Date().getFullYear();
@@ -89,6 +88,14 @@
             updateStatesList(selectedCountryCode);
         }
         window.addEventListener('keydown', handleKeyDown);
+
+        // Load weekend days from localStorage or set defaults
+        const storedWeekendDays = localStorage.getItem('weekendDays');
+        weekendDays = storedWeekendDays 
+            ? JSON.parse(storedWeekendDays) 
+            : [6, 0]; // Default to Saturday (6) and Sunday (0)
+        
+        localStorage.setItem('weekendDays', JSON.stringify(weekendDays));
     });
 
     async function fetchCountryCode() {
@@ -127,10 +134,9 @@
                 date: new Date(holiday.date),
                 hidden: isHolidayHidden(holiday)
             }));
-            const visibleHolidays = holidays
-                .filter(h => !h.hidden);
-            optimizedDaysOff = optimizeDaysOff(visibleHolidays, year, daysOff);
-            consecutiveDaysOff = calculateConsecutiveDaysOff(visibleHolidays, optimizedDaysOff, year);
+            const visibleHolidays = holidays.filter(h => !h.hidden);
+            optimizedDaysOff = optimizeDaysOff(visibleHolidays, year, daysOff, weekendDays);
+            consecutiveDaysOff = calculateConsecutiveDaysOff(visibleHolidays, optimizedDaysOff, year, weekendDays);
         } else {
             holidays = [];
             optimizedDaysOff = [];
@@ -245,6 +251,46 @@
     }
 
     $: visibleHolidaysCount = holidays.filter(h => !h.hidden).length;
+
+    function toggleWeekendDay(dayNumber: number) {
+        if (weekendDays.includes(dayNumber)) {
+            weekendDays = weekendDays.filter(d => d !== dayNumber);
+        } else {
+            weekendDays = [...weekendDays, dayNumber];
+        }
+        weekendDays.sort();
+        localStorage.setItem('weekendDays', JSON.stringify(weekendDays));
+        updateHolidays();
+    }
+
+    function getFirstDayOfWeek(locale: string): number {
+        const normalizedLocale = locale.toLowerCase() === 'us' ? 'en-US' : `en-${locale.toUpperCase()}`;
+        try {
+            // @ts-ignore
+            const weekFirstDay = new Intl.Locale(normalizedLocale)?.weekInfo?.firstDay;
+            if (weekFirstDay !== undefined) {
+                return weekFirstDay;
+            }
+        } catch (e) {
+            // Fallback if weekInfo is not supported
+        }
+        return normalizedLocale === 'en-US' ? 0 : 1;
+    }
+
+    function getOrderedDays() {
+        const days = [
+            { name: 'Sunday', index: 0 },
+            { name: 'Monday', index: 1 },
+            { name: 'Tuesday', index: 2 },
+            { name: 'Wednesday', index: 3 },
+            { name: 'Thursday', index: 4 },
+            { name: 'Friday', index: 5 },
+            { name: 'Saturday', index: 6 }
+        ];
+        
+        const firstDay = getFirstDayOfWeek(selectedCountryCode || 'US');
+        return [...days.slice(firstDay), ...days.slice(0, firstDay)];
+    }
 </script>
 
 <style>
@@ -336,23 +382,27 @@
     .calendar-key {
         display: flex;
         justify-content: center;
-        align-items: center;
+        gap: 20px;
         padding: 5px;
-        border-radius: 5px;
         margin-bottom: 10px;
     }
 
     .key-item {
         display: flex;
         align-items: center;
-        margin: 0 10px;
-        font-size: 0.9em;
+        gap: 5px;
+    }
+
+    .key-label {
+        display: flex;
+        align-items: center;
+        gap: 5px;
     }
 
     .color-box {
         width: 15px;
         height: 15px;
-        margin-right: 5px;
+        min-width: 15px;
         border-radius: 3px;
     }
 
@@ -537,6 +587,9 @@
 
     .holidays-list {
         margin: 10px;
+        padding: 15px;
+        background-color: #222;
+        border-radius: 5px;
     }
 
     .holidays-list ul {
@@ -547,7 +600,18 @@
     .holidays-list li {
         display: flex;
         align-items: center;
-        margin-bottom: 10px;
+        justify-content: space-between;
+        padding: 8px;
+        border-radius: 4px;
+        gap: 10px;
+    }
+
+    .holidays-list li:hover {
+        background-color: #333;
+    }
+
+    .holidays-list span {
+        flex: 1;
     }
 
     .holidays-list button {
@@ -558,10 +622,25 @@
         padding: 5px 25px;
         cursor: pointer;
         border-radius: 5px;
+        min-width: 100px;
     }
 
     .holidays-list button:hover {
         background-color: #555;
+    }
+
+    .settings-section {
+        margin-bottom: 20px;
+    }
+
+    .settings-section:last-child {
+        margin-bottom: 0;
+    }
+
+    .settings-section h3 {
+        margin-top: 0;
+        margin-bottom: 15px;
+        color: #fff;
     }
 </style>
 
@@ -632,37 +711,74 @@
     <div class="content-box" id="calendar">
         <div class="calendar-key">
             <div class="key-item">
-                <span class="color-box weekend"></span> Weekend
-            </div>
-            <div class="key-item">
-                <span class="color-box optimized"></span> Day&nbsp;Off
-            </div>
-            <div class="key-item">
-                <span class="color-box holiday"></span> Public&nbsp;Holiday
-            </div>
-            {#if holidays.length > 0}
-                <a href="#" on:click|preventDefault={() => showHolidaysList = !showHolidaysList} class="edit-link">
-                    (edit&nbsp;list)
+                <div class="key-label">
+                    <span class="color-box weekend"></span>
+                    <span>Weekend</span>
+                </div>
+                <a href="#" on:click|preventDefault={() => showWeekendSettings = !showWeekendSettings} class="edit-link">
+                    (edit)
                 </a>
-            {/if}
+            </div>
+            <div class="key-item">
+                <div class="key-label">
+                    <span class="color-box optimized"></span>
+                    <span>Day Off</span>
+                </div>
+            </div>
+            <div class="key-item">
+                <div class="key-label">
+                    <span class="color-box holiday"></span>
+                    <span>Public Holiday</span>
+                </div>
+                {#if holidays.length > 0}
+                    <a href="#" on:click|preventDefault={() => showHolidaysList = !showHolidaysList} class="edit-link">
+                        (edit)
+                    </a>
+                {/if}
+            </div>
         </div>
 
-        {#if showHolidaysList}
+        {#if showHolidaysList || showWeekendSettings}
         <div class="holidays-list">
-            <h3>Public Holidays</h3>
-            <ul>
-                {#each holidays as holiday}
-                    <li>
-                        <span class="color-box holiday"></span>
-                        <span class={holiday.hidden ? 'strikethrough' : ''}>
-                            {formatDate(holiday.date)}: {holiday.name}
-                        </span>
-                        <button on:click={() => toggleHolidayVisibility(holiday)}>
-                            {holiday.hidden ? 'Show' : 'Hide'}
-                        </button>
-                    </li>
-                {/each}
-            </ul>
+            {#if showHolidaysList}
+                <div class="settings-section">
+                    <h3>Public Holidays</h3>
+                    <ul>
+                        {#each holidays as holiday}
+                            <li>
+                                <div class="setting-item-label">
+                                    <span class="color-box holiday"></span>
+                                    <span class={holiday.hidden ? 'strikethrough' : ''}>
+                                        {formatDate(holiday.date)}: {holiday.name}
+                                    </span>
+                                </div>
+                                <button on:click={() => toggleHolidayVisibility(holiday)}>
+                                    {holiday.hidden ? 'Show' : 'Hide'}
+                                </button>
+                            </li>
+                        {/each}
+                    </ul>
+                </div>
+            {/if}
+
+            {#if showWeekendSettings}
+                <div class="settings-section">
+                    <h3>Weekend Days</h3>
+                    <ul>
+                        {#each getOrderedDays() as {name, index}}
+                            <li>
+                                <div class="setting-item-label">
+                                    <span class="color-box weekend"></span>
+                                    <span>{name}</span>
+                                </div>
+                                <button on:click={() => toggleWeekendDay(index)}>
+                                    {weekendDays.includes(index) ? 'Remove' : 'Add'}
+                                </button>
+                            </li>
+                        {/each}
+                    </ul>
+                </div>
+            {/if}
         </div>
         {/if}
 
@@ -676,6 +792,7 @@
                         optimizedDaysOff={optimizedDaysOff}
                         consecutiveDaysOff={consecutiveDaysOff}
                         selectedCountryCode={selectedCountryCode}
+                        weekendDays={weekendDays}
                     />
                 </div>
             {/each}

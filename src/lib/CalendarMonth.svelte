@@ -7,6 +7,7 @@
     export let optimizedDaysOff: Date[];
     export let consecutiveDaysOff: Array<{ startDate: Date; endDate: Date; totalDays: number }>;
     export let selectedCountryCode: string;
+    export let weekendDays: number[] = [6, 0];
 
     // Function to determine the first day of the week based on locale
     function getFirstDayOfWeek(locale: string): number {
@@ -80,11 +81,8 @@
         });
     }
 
-    function isWeekend(day: number): boolean {
-        const dayOfWeek = (adjustedFirstDay + day - 1) % 7;
-        const saturdayIndex = (6 - firstDayOfWeek + 7) % 7;
-        const sundayIndex = (7 - firstDayOfWeek + 7) % 7;
-        return dayOfWeek === saturdayIndex || dayOfWeek === sundayIndex;
+    function isWeekend(date: Date): boolean {
+        return weekendDays.includes(date.getDay());
     }
 
     const dayInitials = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -103,7 +101,7 @@
         <div class="day"></div>
     {/each}
     {#each Array.from({ length: daysInMonth }, (_, i) => i + 1) as day}
-        <div class="day {isWeekend(day) ? 'weekend' : ''} {getHoliday(day) ? 'holiday' : ''} {isOptimizedDayOff(day) ? 'optimized' : ''} {isConsecutiveDayOff(day) ? 'consecutive-day' : ''}">
+        <div class="day {isWeekend(new Date(year, month, day)) ? 'weekend' : ''} {getHoliday(day) ? 'holiday' : ''} {isOptimizedDayOff(day) ? 'optimized' : ''} {isConsecutiveDayOff(day) ? 'consecutive-day' : ''}">
             {day}
             {#if getHoliday(day)}
                 <Tooltip text={getHoliday(day)?.name} />
