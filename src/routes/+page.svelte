@@ -6,6 +6,10 @@
     import { getHolidaysForYear, optimizeDaysOff, calculateConsecutiveDaysOff } from '../lib/holidayUtils';
     import { ptoData } from '../lib/ptoData';
     import Holidays from 'date-holidays';
+    import { DateInput } from 'date-picker-svelte'
+
+    let calendarComponent;
+    let date = null;
 
     countries.registerLocale(enLocale);
     let countriesList: Record<string, string> = countries.getNames('en');
@@ -14,6 +18,7 @@
     let months: number[] = Array.from({ length: 12 }, (_, i) => i);
     let selectedCountry: string = '';
     let holidays: Array<{ date: Date; name: string; hidden?: boolean }> = [];
+    let chosenDaysOff: Array<Date> = [];
     let daysOff: number = 0;
     let optimizedDaysOff: Date[] = [];
     let consecutiveDaysOff: Array<{ startDate: Date; endDate: Date; totalDays: number }> = [];
@@ -31,14 +36,19 @@
     let statesList: Record<string, string> = {};
 
     let showHolidaysList: boolean = false;
-
     let showWeekendSettings: boolean = false;
+    let showDaysOffSetting: boolean = false;
+
     let weekendDays: number[] = [];
 
     $: selectedCountryCode = Object.keys(countriesList).find(code => countriesList[code] === selectedCountry) || '';
 
-    $: if (selectedCountryCode || selectedStateCode || daysOff || year) {
+    $: if (selectedCountryCode || selectedStateCode || daysOff || year || chosenDaysOff) {
         updateHolidays();
+    }
+
+    $: if (chosenDaysOff.length > 0) {
+        localStorage.setItem('chosenDaysOff', JSON.stringify(chosenDaysOff));
     }
 
     $: if (daysOff) {
@@ -73,6 +83,7 @@
             const storedYear = localStorage.getItem('year');
             const storedCountry = localStorage.getItem('selectedCountry');
             const storedDaysOff = localStorage.getItem('daysOff');
+            const storedChosenDaysOff = JSON.parse(localStorage.getItem('chosenDaysOff')) || [];
             const storedState = localStorage.getItem('selectedState');
             const storedStateCode = localStorage.getItem('selectedStateCode');
 
@@ -81,6 +92,9 @@
             daysOff = storedDaysOff ? parseInt(storedDaysOff, 10) : defaultDaysOff;
             selectedState = storedState || '';
             selectedStateCode = storedStateCode || '';
+            chosenDaysOff = storedChosenDaysOff.map(dateString => {
+              return new Date(dateString);
+            });
             updateHolidays();
         });
 
@@ -135,10 +149,11 @@
                 hidden: isHolidayHidden(holiday)
             }));
             const visibleHolidays = holidays.filter(h => !h.hidden);
-            optimizedDaysOff = optimizeDaysOff(visibleHolidays, year, daysOff, weekendDays);
+            optimizedDaysOff = optimizeDaysOff(visibleHolidays, chosenDaysOff, year, daysOff, weekendDays);
             consecutiveDaysOff = calculateConsecutiveDaysOff(visibleHolidays, optimizedDaysOff, year, weekendDays);
         } else {
             holidays = [];
+            chosenDaysOff = [];
             optimizedDaysOff = [];
             consecutiveDaysOff = [];
         }
@@ -150,11 +165,13 @@
         selectedState = '';
         selectedStateCode = '';
         daysOff = defaultDaysOff;
+        chosenDaysOff = [];
         localStorage.setItem('year', year.toString());
         localStorage.setItem('selectedCountry', selectedCountry);
         localStorage.setItem('selectedState', selectedState);
         localStorage.setItem('selectedStateCode', selectedStateCode);
         localStorage.setItem('daysOff', daysOff.toString());
+        localStorage.setItem('chosenDaysOff', JSON.stringify(chosenDaysOff));
     }
 
     function handleKeyDown(event: KeyboardEvent) {
@@ -291,9 +308,45 @@
         const firstDay = getFirstDayOfWeek(selectedCountryCode || 'US');
         return [...days.slice(firstDay), ...days.slice(0, firstDay)];
     }
+
+    function onChosenDaysOff(chosenDate) {
+        if (!chosenDate || calendarComponent.isChosenOff(chosenDate))
+            return;
+
+        chosenDaysOff.push(chosenDate);
+        // This triggers a calendar re-render
+        // https://github.com/sveltejs/svelte/issues/2362
+        chosenDaysOff = chosenDaysOff;
+        localStorage.setItem('chosenDaysOff', JSON.stringify(chosenDaysOff));
+        updateHolidays();
+    }
+
+    function removeChosen(toRemove) {
+        chosenDaysOff = chosenDaysOff.filter((date) => date.toDateString() !== toRemove.toDateString());
+        localStorage.setItem('chosenDaysOff', JSON.stringify(chosenDaysOff));
+        updateHolidays();
+    }
+
+    function getMinDate() {
+        const today = new Date();
+        today.setFullYear(year);
+        today.setMonth(0, 1);
+        return today;
+    }
+
+    function getMaxDate() {
+        const today = new Date();
+        today.setFullYear(year);
+        today.setMonth(11, 31);
+        return today;
+    }
 </script>
 
 <style>
+    :root {
+      --date-picker-background: #111;
+      --date-picker-foreground: #f7f7f7;
+    }
     .header {
         max-width: 800px;
         margin: 20px auto;
@@ -545,6 +598,14 @@
         margin-right: 5px;
         border-radius: 3px;
     }
+    .color-box.chosen {
+        background-color: rgba(255,0,0,255);
+        display: inline-block;
+        width: 15px;
+        height: 15px;
+        margin-right: 5px;
+        border-radius: 3px;
+    }
 
     .content-box ul {
         list-style-type: none;
@@ -711,9 +772,13 @@
         <div class="calendar-key">
             <div class="key-item">
                 <div class="key-label">
+                    <span class="color-box chosen"></span>
                     <span class="color-box optimized"></span>
                     <span>Day Off</span>
                 </div>
+                <a href="#" on:click|preventDefault={() => showDaysOffSetting = !showDaysOffSetting} class="edit-link">
+                    (edit)
+                </a>
             </div>
             <div class="key-item">
                 <div class="key-label">
@@ -737,8 +802,29 @@
             </div>
         </div>
 
-        {#if showHolidaysList || showWeekendSettings}
+        {#if showDaysOffSetting || showHolidaysList || showWeekendSettings}
         <div class="holidays-list">
+            {#if showDaysOffSetting}
+                <div class="settings-section">
+                    <h3>Choose Days Off</h3>
+                    <ul>
+                        {#each chosenDaysOff as dayOff}
+                            <li>
+                                <div class="setting-item-label">
+                                    <span class="color-box chosen"></span>
+                                    <span>
+                                        {formatDate(dayOff)} 
+                                        <button type="submit" on:click={() => removeChosen(dayOff)}>Remove</button>
+                                    </span>
+                                </div>
+                            </li>
+                        {/each}
+                    </ul>
+                    <DateInput bind:value={date} max={getMaxDate()} min={getMinDate()} format="yyyy-MM-dd" />
+                    <button type="submit" on:click={() => onChosenDaysOff(date)}>Submit</button>
+                </div>
+            {/if}
+
             {#if showHolidaysList}
                 <div class="settings-section">
                     <h3>Public Holidays</h3>
@@ -785,9 +871,11 @@
             {#each months as month}
                 <div class="calendar-container">
                     <CalendarMonth
+                        bind:this={calendarComponent}
                         year={year}
                         month={month}
                         holidays={holidays}
+                        chosenDaysOff={chosenDaysOff}
                         optimizedDaysOff={optimizedDaysOff}
                         consecutiveDaysOff={consecutiveDaysOff}
                         selectedCountryCode={selectedCountryCode}

@@ -4,6 +4,7 @@
     export let year: number;
     export let month: number;
     export let holidays: Array<{ date: Date; name: string; hidden?: boolean }>;
+    export let chosenDaysOff: Array<Date>;
     export let optimizedDaysOff: Date[];
     export let consecutiveDaysOff: Array<{ startDate: Date; endDate: Date; totalDays: number }>;
     export let selectedCountryCode: string;
@@ -84,6 +85,12 @@
         return weekendDays.includes(date.getDay());
     }
 
+    export function isChosenOff(date: Date): boolean {
+        return chosenDaysOff.some(chosenDate => {
+            return date.toDateString() === chosenDate.toDateString();
+        });
+    }
+
     const dayInitials = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
     $: orderedDayInitials = dayInitials.slice(firstDayOfWeek).concat(dayInitials.slice(0, firstDayOfWeek));
@@ -101,7 +108,7 @@
     {/each}
     {#each Array.from({ length: daysInMonth }, (_, i) => i + 1) as day}
         {@const holiday = getHoliday(day)}
-        <div class="day {isWeekend(new Date(year, month, day)) ? 'weekend' : ''} {holiday ? 'holiday' : ''} {isOptimizedDayOff(day) ? 'optimized' : ''} {isConsecutiveDayOff(day) ? 'consecutive-day' : ''}">
+        <div class="day {isWeekend(new Date(year, month, day)) ? 'weekend' : ''} {holiday ? 'holiday' : ''} {isChosenOff(new Date(year, month, day)) ? 'chosen' : ''} {isOptimizedDayOff(day) ? 'optimized' : ''} {isConsecutiveDayOff(day) ? 'consecutive-day' : ''}">
             <span class={holiday?.hidden ? 'strikethrough' : ''}>{day}</span>
             {#if holiday}
                 <Tooltip text={holiday.name} />
@@ -153,6 +160,9 @@
             opacity: 1;
             pointer-events: auto;
         }
+    }
+    .chosen {
+        background-color: rgba(255, 0, 0, 0.7) !important;
     }
     .weekend {
         background-color: #585858;

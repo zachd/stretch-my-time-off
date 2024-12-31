@@ -31,14 +31,15 @@ export function getHolidaysForYear(countryCode: string, year: number, stateCode?
 }
 
 // Find optimal placement of PTO days to maximize consecutive time off
-export function optimizeDaysOff(holidays: { date: Date }[], year: number, daysOff: number, weekendDays: number[] = [0, 6]): Date[] {
+export function optimizeDaysOff(holidays: { date: Date }[], chosen: Date[], year: number, daysOff: number, weekendDays: number[] = [0, 6]): Date[] {
     const allDaysOff = new Set([
         ...holidays.filter(h => h.date.getFullYear() === year).map(h => dateKey(h.date)),
+        ...chosen.filter(h => h.getFullYear() === year).map(h => dateKey(h)),
         ...getWeekends(year, weekendDays).map(d => dateKey(d))
     ]);
 
     const gaps = findGaps(allDaysOff, year, weekendDays);
-    return selectDaysOff(rankGapsByEfficiency(gaps, allDaysOff, weekendDays), daysOff, allDaysOff, weekendDays);
+    return selectDaysOff(rankGapsByEfficiency(gaps, allDaysOff, weekendDays), daysOff, allDaysOff, chosen, weekendDays);
 }
 
 // Calculate periods of consecutive days off (weekends + holidays + PTO)
@@ -138,21 +139,23 @@ function calculateChain(date: Date, gapLength: number, allDaysOff: Set<string>, 
 }
 
 // Select optimal days off based on ranked gaps
-function selectDaysOff(rankedGaps: any[], daysOff: number, allDaysOff: Set<string>, weekendDays: number[]): Date[] {
-    const selectedDays = [];
-    let remainingDays = daysOff;
+function selectDaysOff(rankedGaps: any[], daysOff: number, allDaysOff: Set<string>, chosen: Date[], weekendDays: number[]): Date[] {
+    const selectedDays = [...chosen];
+    let remainingDays = daysOff - selectedDays.length;
+    const chosenSet = new Set([
+        ...chosen.map(h => dateKey(h)),
+    ]);
 
     for (const gap of rankedGaps) {
         if (remainingDays <= 0) break;
-        
+
         const increment = gap.fillFrom === 'start' ? 1 : -1;
         const startDate = gap.fillFrom === 'start' ? gap.start : gap.end;
 
         for (let i = 0; i < gap.gapLength && remainingDays > 0; i++) {
             const day = new Date(startDate);
             day.setDate(day.getDate() + (i * increment));
-            
-            if (!allDaysOff.has(dateKey(day)) && !isWeekend(day, weekendDays)) {
+            if (!chosenSet.has(dateKey(day)) && !allDaysOff.has(dateKey(day)) && !isWeekend(day, weekendDays)) {
                 selectedDays.push(day);
                 remainingDays--;
             }
