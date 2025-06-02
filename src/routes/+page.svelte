@@ -38,7 +38,11 @@
     $: selectedCountryCode = Object.keys(countriesList).find(code => countriesList[code] === selectedCountry) || '';
 
     $: if (selectedCountryCode || selectedStateCode || daysOff || year) {
-        updateHolidays();
+        if (stretchFromToday) {
+            updateHolidaysFromToday();
+        } else {
+            updateHolidays();
+        }
     }
 
     $: if (daysOff) {
@@ -91,10 +95,10 @@
 
         // Load weekend days from localStorage or set defaults
         const storedWeekendDays = localStorage.getItem('weekendDays');
-        weekendDays = storedWeekendDays 
-            ? JSON.parse(storedWeekendDays) 
+        weekendDays = storedWeekendDays
+            ? JSON.parse(storedWeekendDays)
             : [6, 0]; // Default to Saturday (6) and Sunday (0)
-        
+
         localStorage.setItem('weekendDays', JSON.stringify(weekendDays));
     });
 
@@ -144,17 +148,56 @@
         }
     }
 
+    let stretchFromToday: boolean = false;
+
+    function stretchFromTodayHandler() {
+        stretchFromToday = true;
+        updateHolidaysFromToday();
+    }
+
+    function updateHolidaysFromToday() {
+        if (selectedCountryCode) {
+            updateStatesList(selectedCountryCode);
+            let allHolidays = getHolidaysForYear(selectedCountryCode, year, selectedStateCode);
+            const today = new Date();
+            today.setHours(0,0,0,0);
+            holidays = allHolidays
+                .filter(holiday => new Date(holiday.date) >= today)
+                .map(holiday => ({
+                    ...holiday,
+                    date: new Date(holiday.date),
+                    hidden: isHolidayHidden(holiday)
+                }));
+            const visibleHolidays = holidays.filter(h => !h.hidden);
+            optimizedDaysOff = optimizeDaysOff(visibleHolidays, year, daysOff, weekendDays)
+                .map(date => new Date(date))
+                .filter(date => date >= today);
+            consecutiveDaysOff = calculateConsecutiveDaysOff(visibleHolidays, optimizedDaysOff, year, weekendDays)
+                .filter(period => period.endDate >= today);
+        } else {
+            holidays = [];
+            optimizedDaysOff = [];
+            consecutiveDaysOff = [];
+        }
+    }
+
     function resetToDefault() {
         year = defaultYear;
         selectedCountry = defaultCountry;
         selectedState = '';
         selectedStateCode = '';
         daysOff = defaultDaysOff;
+        stretchFromToday = false;
         localStorage.setItem('year', year.toString());
         localStorage.setItem('selectedCountry', selectedCountry);
         localStorage.setItem('selectedState', selectedState);
         localStorage.setItem('selectedStateCode', selectedStateCode);
         localStorage.setItem('daysOff', daysOff.toString());
+    }
+
+    $: if (stretchFromToday && year < new Date().getFullYear()) {
+        // If user selects a year before today, auto-uncheck stretchFromToday
+        stretchFromToday = false;
     }
 
     function handleKeyDown(event: KeyboardEvent) {
@@ -233,7 +276,11 @@
             return h;
         });
 
-        updateHolidays();
+        if (stretchFromToday) {
+            updateHolidaysFromToday();
+        } else {
+            updateHolidays();
+        }
     }
 
     function isHolidayHidden(holiday: { date: Date; name: string; hidden?: boolean }) {
@@ -260,7 +307,11 @@
         }
         weekendDays.sort();
         localStorage.setItem('weekendDays', JSON.stringify(weekendDays));
-        updateHolidays();
+        if (stretchFromToday) {
+            updateHolidaysFromToday();
+        } else {
+            updateHolidays();
+        }
     }
 
     function getFirstDayOfWeek(locale: string): number {
@@ -287,7 +338,7 @@
             { name: 'Friday', index: 5 },
             { name: 'Saturday', index: 6 }
         ];
-        
+
         const firstDay = getFirstDayOfWeek(selectedCountryCode || 'US');
         return [...days.slice(firstDay), ...days.slice(0, firstDay)];
     }
@@ -647,14 +698,14 @@
     <div class="header">
         <h2>🌴 Stretch&nbsp;My Time&nbsp;Off</h2>
         <p>
-            In 
+            In
             <strong>
                 {getFlagEmoji(selectedCountryCode)}
                 {#if selectedState}
-                    {selectedState}, 
+                    {selectedState},
                 {/if}
                 {selectedCountry}
-            </strong>, there are <strong>{holidays.length}</strong> public holidays{#if visibleHolidaysCount < holidays.length}&nbsp;(<strong>{visibleHolidaysCount} selected</strong>){/if} in&nbsp;<strong>{year}</strong>. 
+            </strong>, there {holidays.length === 1 ? 'is' : 'are'} <strong>{holidays.length}</strong> public holiday{holidays.length === 1 ? '' : 's'}{#if visibleHolidaysCount < holidays.length}&nbsp;(<strong>{visibleHolidaysCount} selected</strong>){/if} in&nbsp;<strong>{year}</strong>{stretchFromToday ? ' ' : ''}{#if stretchFromToday}<span style="color:#4caf50;">(from today)</span>{/if}.
         </p>
         <p>
             Let's stretch your time off from <strong>{daysOff}&nbsp;days</strong> to <strong>{consecutiveDaysOff.reduce((total, group) => total + group.totalDays, 0)}&nbsp;days</strong> (<a href="#how-it-works" on:click={toggleHowItWorks}>how?</a>)
@@ -663,13 +714,13 @@
 
     <div class="content-box">
         <p>
-            I live in 
+            I live in
             <span class="flag" style="vertical-align: middle;">{getFlagEmoji(selectedCountryCode)}</span>
             {#if Object.keys(statesList).length > 0}
-                <input bind:this={statesInput} list="states" class="editable-input bold" bind:value={selectedState} 
-                    on:input={(e) => handleStateChange(e)} 
-                    on:focus={(e) => { (e.target as HTMLInputElement).value = ''; }} 
-                    placeholder="State" 
+                <input bind:this={statesInput} list="states" class="editable-input bold" bind:value={selectedState}
+                    on:input={(e) => handleStateChange(e)}
+                    on:focus={(e) => { (e.target as HTMLInputElement).value = ''; }}
+                    placeholder="State"
                     aria-label="State" />
                 <datalist id="states">
                     {#each Object.entries(statesList) as [code, name]}
@@ -678,12 +729,12 @@
                 </datalist>
                 in
             {/if}
-            <input bind:this={countriesInput} list="countries" class="editable-input bold" bind:value={selectedCountry} 
-                on:input={(e) => handleCountryChange(e)} 
-                on:focus={(e) => { (e.target as HTMLInputElement).value = ''; }} 
-                placeholder="Country" 
+            <input bind:this={countriesInput} list="countries" class="editable-input bold" bind:value={selectedCountry}
+                on:input={(e) => handleCountryChange(e)}
+                on:focus={(e) => { (e.target as HTMLInputElement).value = ''; }}
+                placeholder="Country"
                 aria-label="Select country" />
-            and have 
+            and have
             <span class="arrow-controls">
                 <button on:click={() => { if (daysOff > 0) { daysOff--; updateHolidays(); } }} aria-label="Decrease days off">▼</button>
                 <span class="bold">{daysOff}</span>
@@ -695,6 +746,10 @@
                 <span class="bold">{year}</span>
                 <button on:click={() => { year++; updateHolidays(); }} aria-label="Next year">▶</button>
             </span>
+            <label style="margin-left: 18px; user-select: none; cursor: pointer; display: inline-flex; align-items: center; font-size: 1em;">
+                <input type="checkbox" bind:checked={stretchFromToday} on:change={() => stretchFromToday ? stretchFromTodayHandler() : (stretchFromToday = false, updateHolidays())} style="accent-color: #4caf50; width: 1.1em; height: 1.1em; margin-right: 7px; vertical-align: middle;" />
+                Count from today only
+            </label>
         </p>
         {#if year !== defaultYear || selectedCountry !== defaultCountry || daysOff !== defaultDaysOff}
             <a href="#" on:click|preventDefault={resetToDefault} class="reset-link">Reset to my country</a>
@@ -708,6 +763,11 @@
     </div>
 
     <div class="content-box" id="calendar">
+        {#if stretchFromToday && holidays.length === 0}
+            <div style="text-align:center; color:#ff9800; font-size:1.1em; margin: 20px 0;">
+                No public holidays left from today in {year}.
+            </div>
+        {/if}
         <div class="calendar-key">
             <div class="key-item">
                 <div class="key-label">
@@ -824,4 +884,4 @@
 <footer>
     <p>Made with ☕ by <a href="https://zach.ie" target="_blank">Zach</a> (+ GPT-4o)</p>
     <p><a href="https://github.com/zachd/stretch-my-time-off" target="_blank" rel="noopener noreferrer">View on GitHub</a></p>
-</footer> 
+</footer>
