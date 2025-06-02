@@ -307,7 +307,11 @@
         }
         weekendDays.sort();
         localStorage.setItem('weekendDays', JSON.stringify(weekendDays));
-        updateHolidays();
+        if (stretchFromToday) {
+            updateHolidaysFromToday();
+        } else {
+            updateHolidays();
+        }
     }
 
     function getFirstDayOfWeek(locale: string): number {
