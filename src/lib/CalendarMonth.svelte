@@ -1,14 +1,31 @@
 <script lang="ts">
     import Tooltip from './Tooltip.svelte';
+    import { createEventDispatcher } from 'svelte';
+
+    const dispatch = createEventDispatcher();
 
     export let year: number;
     export let month: number;
     export let holidays: Array<{ date: Date; name: string; hidden?: boolean }>;
     export let chosenDaysOff: Array<Date>;
     export let optimizedDaysOff: Date[];
-    export let consecutiveDaysOff: Array<{ startDate: Date; endDate: Date; totalDays: number }>;
+    export let excludedDaysOff: Date[] = [];
+    export let consecutiveDaysOff: Array<{ startDate: Date; endDate: Date; totalDays: number; fullConsecutiveDays: number }>;
     export let selectedCountryCode: string;
     export let weekendDays: number[] = [6, 0];
+
+    function handleDayClick(day: number, event: MouseEvent) {
+        const date = new Date(year, month, day);
+        const holiday = getHoliday(day);
+        const isWeekendDay = isWeekend(date);
+        
+        // Don't allow clicking on weekends or holidays
+        if (isWeekendDay || holiday) {
+            return;
+        }
+        
+        dispatch('dayClick', { date, ctrlKey: event.ctrlKey, metaKey: event.metaKey });
+    }
 
     // Function to determine the first day of the week based on locale
     function getFirstDayOfWeek(locale: string): number {
@@ -52,6 +69,14 @@
 
     function isOptimizedDayOff(day: number): boolean {
         return optimizedDaysOff.some(date => 
+            date.getFullYear() === year &&
+            date.getMonth() === month &&
+            date.getDate() === day
+        );
+    }
+
+    function isExcludedDayOff(day: number): boolean {
+        return excludedDaysOff.some(date => 
             date.getFullYear() === year &&
             date.getMonth() === month &&
             date.getDate() === day
@@ -108,12 +133,27 @@
     {/each}
     {#each Array.from({ length: daysInMonth }, (_, i) => i + 1) as day}
         {@const holiday = getHoliday(day)}
-        <div class="day {isWeekend(new Date(year, month, day)) ? 'weekend' : ''} {holiday ? 'holiday' : ''} {isChosenOff(new Date(year, month, day)) ? 'chosen' : ''} {isOptimizedDayOff(day) ? 'optimized' : ''} {isConsecutiveDayOff(day) ? 'consecutive-day' : ''}">
-            <span class={holiday?.hidden ? 'strikethrough' : ''}>{day}</span>
-            {#if holiday}
-                <Tooltip text={holiday.name} />
-            {/if}
-        </div>
+        {@const isWeekendDay = isWeekend(new Date(year, month, day))}
+        {@const isChosen = isChosenOff(new Date(year, month, day))}
+        {@const isOptimized = isOptimizedDayOff(day)}
+        {@const isExcluded = !isChosen && isExcludedDayOff(day)} <!-- Only show as excluded if NOT chosen -->
+        {@const isClickable = !isWeekendDay && !holiday}
+        {#if isClickable}
+            <button
+                class="day {isChosen ? 'chosen' : ''} {isOptimized && !isChosen ? 'optimized' : ''} {isExcluded ? 'excluded' : ''} {isConsecutiveDayOff(day) ? 'consecutive-day' : ''} clickable"
+                on:click={(e) => handleDayClick(day, e)}
+                aria-label="{isChosen ? 'Remove' : isExcluded ? 'Include' : 'Add'} day {day}"
+            >
+                <span>{day}</span>
+            </button>
+        {:else}
+            <div class="day {isWeekendDay ? 'weekend' : ''} {holiday ? 'holiday' : ''} {isConsecutiveDayOff(day) ? 'consecutive-day' : ''}">
+                <span class={holiday?.hidden ? 'strikethrough' : ''}>{day}</span>
+                {#if holiday}
+                    <Tooltip text={holiday.name} />
+                {/if}
+            </div>
+        {/if}
     {/each}
 </div>
 
@@ -154,6 +194,21 @@
         color: #ddd;
         background-color: #222;
         position: relative;
+        border: none;
+        width: 100%;
+        font-family: inherit;
+        padding: 0;
+    }
+    .day.clickable {
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+    .day.clickable:hover {
+        background-color: #333;
+    }
+    .day.clickable:focus {
+        outline: 2px solid #4caf50;
+        outline-offset: -2px;
     }
     .day:hover {
         :global(.tooltip) {
@@ -162,13 +217,27 @@
         }
     }
     .chosen {
-        background-color: rgba(255, 0, 0, 0.7) !important;
+        background-color: #2196f3 !important; /* Blue - user's active choice */
+    }
+    .chosen.clickable:hover {
+        background-color: #42a5f5 !important;
     }
     .weekend {
         background-color: #585858;
     }
     .optimized {
-        background-color: #4caf50;
+        background-color: #4caf50; /* Green - good/recommended */
+    }
+    .optimized.clickable:hover {
+        background-color: #66bb6a;
+    }
+    .excluded {
+        background-color: #f44336; /* Red - rejected/blocked */
+        opacity: 0.7;
+    }
+    .excluded.clickable:hover {
+        background-color: #ef5350;
+        opacity: 0.85;
     }
     .holiday {
         background-color: #3b1e6e;

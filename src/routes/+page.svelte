@@ -6,28 +6,50 @@
     import { getHolidaysForYear, optimizeDaysOff, calculateConsecutiveDaysOff } from '../lib/holidayUtils';
     import { ptoData } from '../lib/ptoData';
     import Holidays from 'date-holidays';
-    import { DateInput } from 'date-picker-svelte'
 
-    let calendarComponent;
-    let date = null;
+    let calendarComponent: any;
 
     countries.registerLocale(enLocale);
     let countriesList: Record<string, string> = countries.getNames('en');
 
-    let year: number;
-    let months: number[] = Array.from({ length: 12 }, (_, i) => i);
+    let startDate: string = new Date().toISOString().split('T')[0]; // Today's date in YYYY-MM-DD format
+    
+    // Set default expiry to 1 year from start date
+    const getDefaultExpiryDate = (start: string) => {
+        const d = new Date(start);
+        d.setFullYear(d.getFullYear() + 1);
+        return d.toISOString().split('T')[0];
+    };
+    
+    // Generate list of months to display based on start and expiry dates
+    $: monthsToDisplay = (() => {
+        const start = new Date(startDate);
+        const expiry = ptoExpiryDate ? new Date(ptoExpiryDate) : new Date(getDefaultExpiryDate(startDate));
+        const months: Array<{ year: number; month: number }> = [];
+        
+        const current = new Date(start.getFullYear(), start.getMonth(), 1);
+        const end = new Date(expiry.getFullYear(), expiry.getMonth(), 1);
+        
+        while (current <= end) {
+            months.push({ year: current.getFullYear(), month: current.getMonth() });
+            current.setMonth(current.getMonth() + 1);
+        }
+        
+        return months;
+    })();
+    
     let selectedCountry: string = '';
     let holidays: Array<{ date: Date; name: string; hidden?: boolean }> = [];
     let chosenDaysOff: Array<Date> = [];
+    let excludedDaysOff: Array<Date> = []; // Days user wants to exclude from optimization
     let daysOff: number = 0;
     let optimizedDaysOff: Date[] = [];
-    let consecutiveDaysOff: Array<{ startDate: Date; endDate: Date; totalDays: number }> = [];
+    let consecutiveDaysOff: Array<{ startDate: Date; endDate: Date; totalDays: number; fullConsecutiveDays: number }> = [];
     let countriesInput: HTMLInputElement | null = null;
     let statesInput: HTMLInputElement | null = null;
     let showHowItWorks: boolean = false;
 
     // Default settings
-    let defaultYear: number = new Date().getFullYear();
     let defaultCountry: string = '';
     let defaultDaysOff: number = 0;
 
@@ -37,26 +59,50 @@
 
     let showHolidaysList: boolean = false;
     let showWeekendSettings: boolean = false;
-    let showDaysOffSetting: boolean = false;
 
     let weekendDays: number[] = [];
+    let ptoExpiryDate: string = getDefaultExpiryDate(startDate); // Default to 1 year from start date
+
+    // Calculate stats about the date range
+    $: dateRangeStats = (() => {
+        const start = new Date(startDate);
+        const expiry = ptoExpiryDate ? new Date(ptoExpiryDate) : new Date(getDefaultExpiryDate(startDate));
+        const diffTime = Math.abs(expiry.getTime() - start.getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        const diffMonths = monthsToDisplay.length;
+        return { days: diffDays, months: diffMonths };
+    })();
+
+    // Calculate remaining PTO days
+    $: remainingPtoDays = Math.max(0, daysOff - (chosenDaysOff.length + optimizedDaysOff.length));
 
     $: selectedCountryCode = Object.keys(countriesList).find(code => countriesList[code] === selectedCountry) || '';
 
-    $: if (selectedCountryCode || selectedStateCode || daysOff || year || chosenDaysOff) {
+    $: if (startDate && typeof window !== 'undefined') {
+        localStorage.setItem('startDate', startDate);
+        
+        // Update expiry date if it hasn't been manually set or if it's before the new start date
+        const startDateObj = new Date(startDate);
+        const expiryDateObj = ptoExpiryDate ? new Date(ptoExpiryDate) : null;
+        if (!expiryDateObj || expiryDateObj < startDateObj) {
+            ptoExpiryDate = getDefaultExpiryDate(startDate);
+        }
+    }
+
+    $: if (selectedCountryCode || selectedStateCode || daysOff || chosenDaysOff || ptoExpiryDate) {
         updateHolidays();
     }
 
-    $: if (chosenDaysOff.length > 0) {
+    $: if (chosenDaysOff.length > 0 && typeof window !== 'undefined') {
         localStorage.setItem('chosenDaysOff', JSON.stringify(chosenDaysOff));
     }
 
-    $: if (daysOff) {
+    $: if (daysOff && typeof window !== 'undefined') {
         localStorage.setItem('daysOff', daysOff.toString());
     }
 
-    $: if (year) {
-        localStorage.setItem('year', year.toString());
+    $: if (ptoExpiryDate && typeof window !== 'undefined') {
+        localStorage.setItem('ptoExpiryDate', ptoExpiryDate);
     }
 
     function updateStatesList(countryCode: string) {
@@ -76,25 +122,30 @@
     onMount(() => {
 
         fetchCountryCode().then(() => {
-            defaultYear = new Date().getFullYear();
             defaultCountry = selectedCountry;
             defaultDaysOff = ptoData[selectedCountryCode] || 0;
 
-            const storedYear = localStorage.getItem('year');
             const storedCountry = localStorage.getItem('selectedCountry');
             const storedDaysOff = localStorage.getItem('daysOff');
-            const storedChosenDaysOff = JSON.parse(localStorage.getItem('chosenDaysOff')) || [];
+            const storedChosenDaysOff = JSON.parse(localStorage.getItem('chosenDaysOff') || '[]');
+            const storedExcludedDaysOff = JSON.parse(localStorage.getItem('excludedDaysOff') || '[]');
             const storedState = localStorage.getItem('selectedState');
             const storedStateCode = localStorage.getItem('selectedStateCode');
+            const storedPtoExpiryDate = localStorage.getItem('ptoExpiryDate');
+            const storedStartDate = localStorage.getItem('startDate');
 
-            year = storedYear ? parseInt(storedYear, 10) : defaultYear;
             selectedCountry = storedCountry || defaultCountry;
             daysOff = storedDaysOff ? parseInt(storedDaysOff, 10) : defaultDaysOff;
             selectedState = storedState || '';
             selectedStateCode = storedStateCode || '';
-            chosenDaysOff = storedChosenDaysOff.map(dateString => {
+            chosenDaysOff = storedChosenDaysOff.map((dateString: string) => {
               return new Date(dateString);
             });
+            excludedDaysOff = storedExcludedDaysOff.map((dateString: string) => {
+              return new Date(dateString);
+            });
+            ptoExpiryDate = storedPtoExpiryDate || '';
+            startDate = storedStartDate || new Date().toISOString().split('T')[0];
             updateHolidays();
         });
 
@@ -142,15 +193,39 @@
     function updateHolidays() {
         if (selectedCountryCode) {
             updateStatesList(selectedCountryCode);
-            let allHolidays = getHolidaysForYear(selectedCountryCode, year, selectedStateCode);
-            holidays = allHolidays.map(holiday => ({
-                ...holiday,
-                date: new Date(holiday.date),
-                hidden: isHolidayHidden(holiday)
-            }));
+            
+            // Determine which years we need to fetch holidays for
+            const startDateObj = new Date(startDate + 'T00:00:00');
+            const expiryDateObj = new Date((ptoExpiryDate || getDefaultExpiryDate(startDate)) + 'T23:59:59');
+            
+            // Fetch holidays for all years in the range
+            const yearsToFetch = new Set<number>();
+            const startYear = startDateObj.getFullYear();
+            const endYear = expiryDateObj.getFullYear();
+            for (let y = startYear; y <= endYear; y++) {
+                yearsToFetch.add(y);
+            }
+            
+            // Fetch and combine holidays from all relevant years
+            let allHolidays: Array<{ date: Date | string; name: string }> = [];
+            yearsToFetch.forEach(y => {
+                const yearHolidays = getHolidaysForYear(selectedCountryCode, y, selectedStateCode);
+                allHolidays = [...allHolidays, ...yearHolidays];
+            });
+            
+            holidays = allHolidays.map(holiday => {
+                const holidayWithDate = {
+                    ...holiday,
+                    date: new Date(holiday.date)
+                };
+                return {
+                    ...holidayWithDate,
+                    hidden: isHolidayHidden(holidayWithDate)
+                };
+            });
             const visibleHolidays = holidays.filter(h => !h.hidden);
-            optimizedDaysOff = optimizeDaysOff(visibleHolidays, chosenDaysOff, year, daysOff, weekendDays);
-            consecutiveDaysOff = calculateConsecutiveDaysOff(visibleHolidays, optimizedDaysOff, year, weekendDays);
+            optimizedDaysOff = optimizeDaysOff(visibleHolidays, chosenDaysOff, daysOff, weekendDays, startDateObj, expiryDateObj, excludedDaysOff);
+            consecutiveDaysOff = calculateConsecutiveDaysOff(visibleHolidays, optimizedDaysOff, weekendDays, startDateObj, expiryDateObj, chosenDaysOff);
         } else {
             holidays = [];
             chosenDaysOff = [];
@@ -160,32 +235,44 @@
     }
 
     function resetToDefault() {
-        year = defaultYear;
         selectedCountry = defaultCountry;
         selectedState = '';
         selectedStateCode = '';
         daysOff = defaultDaysOff;
         chosenDaysOff = [];
-        localStorage.setItem('year', year.toString());
+        excludedDaysOff = [];
+        startDate = new Date().toISOString().split('T')[0];
+        ptoExpiryDate = getDefaultExpiryDate(startDate);
         localStorage.setItem('selectedCountry', selectedCountry);
         localStorage.setItem('selectedState', selectedState);
         localStorage.setItem('selectedStateCode', selectedStateCode);
         localStorage.setItem('daysOff', daysOff.toString());
         localStorage.setItem('chosenDaysOff', JSON.stringify(chosenDaysOff));
+        localStorage.setItem('excludedDaysOff', JSON.stringify(excludedDaysOff));
+    }
+
+    function setDateRangePreset(preset: 'rest-of-year' | '6-months' | '12-months') {
+        const today = new Date();
+        startDate = today.toISOString().split('T')[0];
+        
+        switch (preset) {
+            case 'rest-of-year':
+                const endOfYear = new Date(today.getFullYear(), 11, 31);
+                ptoExpiryDate = endOfYear.toISOString().split('T')[0];
+                break;
+            case '6-months':
+                const sixMonths = new Date(today);
+                sixMonths.setMonth(sixMonths.getMonth() + 6);
+                ptoExpiryDate = sixMonths.toISOString().split('T')[0];
+                break;
+            case '12-months':
+                ptoExpiryDate = getDefaultExpiryDate(startDate);
+                break;
+        }
     }
 
     function handleKeyDown(event: KeyboardEvent) {
         switch (event.key) {
-            case 'ArrowRight':
-                event.preventDefault();
-                year++;
-                updateHolidays();
-                break;
-            case 'ArrowLeft':
-                event.preventDefault();
-                year--;
-                updateHolidays();
-                break;
             case 'ArrowUp':
                 event.preventDefault();
                 daysOff++;
@@ -309,36 +396,73 @@
         return [...days.slice(firstDay), ...days.slice(0, firstDay)];
     }
 
-    function onChosenDaysOff(chosenDate) {
-        if (!chosenDate || calendarComponent.isChosenOff(chosenDate))
+    function onChosenDaysOff(chosenDate: Date | null) {
+        if (!chosenDate)
             return;
+
+        // Check if day is already chosen - if so, remove it
+        if (calendarComponent.isChosenOff(chosenDate)) {
+            removeChosen(chosenDate);
+            return;
+        }
+
+        // A day cannot be both chosen and excluded - remove from excluded if present
+        excludedDaysOff = excludedDaysOff.filter(d => d.toDateString() !== chosenDate.toDateString());
 
         chosenDaysOff.push(chosenDate);
         // This triggers a calendar re-render
         // https://github.com/sveltejs/svelte/issues/2362
         chosenDaysOff = chosenDaysOff;
         localStorage.setItem('chosenDaysOff', JSON.stringify(chosenDaysOff));
+        localStorage.setItem('excludedDaysOff', JSON.stringify(excludedDaysOff));
         updateHolidays();
     }
 
-    function removeChosen(toRemove) {
+    function removeChosen(toRemove: Date) {
         chosenDaysOff = chosenDaysOff.filter((date) => date.toDateString() !== toRemove.toDateString());
         localStorage.setItem('chosenDaysOff', JSON.stringify(chosenDaysOff));
         updateHolidays();
     }
 
+    function handleDayClick(event: CustomEvent<{ date: Date; ctrlKey: boolean; metaKey: boolean }>) {
+        const { date, ctrlKey, metaKey } = event.detail;
+        
+        // Ctrl/Cmd+Click: Toggle excluded status for any working day
+        if (ctrlKey || metaKey) {
+            const isExcluded = excludedDaysOff.some(d => d.toDateString() === date.toDateString());
+            const isChosen = chosenDaysOff.some(d => d.toDateString() === date.toDateString());
+            
+            // A day cannot be both chosen and excluded
+            if (isChosen) {
+                return; // Don't allow excluding chosen days
+            }
+            
+            if (isExcluded) {
+                // Un-exclude this day
+                excludedDaysOff = excludedDaysOff.filter(d => d.toDateString() !== date.toDateString());
+                localStorage.setItem('excludedDaysOff', JSON.stringify(excludedDaysOff));
+                updateHolidays();
+            } else {
+                // Exclude this day (works for any working day, not just optimized)
+                excludedDaysOff.push(date);
+                excludedDaysOff = excludedDaysOff;
+                localStorage.setItem('excludedDaysOff', JSON.stringify(excludedDaysOff));
+                updateHolidays();
+            }
+        } else {
+            // Normal click: Toggle chosen status
+            onChosenDaysOff(date);
+        }
+    }
+
     function getMinDate() {
-        const today = new Date();
-        today.setFullYear(year);
-        today.setMonth(0, 1);
-        return today;
+        const startDateObj = new Date(startDate);
+        return startDateObj;
     }
 
     function getMaxDate() {
-        const today = new Date();
-        today.setFullYear(year);
-        today.setMonth(11, 31);
-        return today;
+        const expiryDate = ptoExpiryDate ? new Date(ptoExpiryDate) : new Date(getDefaultExpiryDate(startDate));
+        return expiryDate;
     }
 </script>
 
@@ -461,6 +585,14 @@
 
     .color-box.weekend {
         background-color: #585858;
+    }
+
+    .color-box.chosen {
+        background-color: #2196f3 !important; /* Blue - user's active choice */
+    }
+
+    .color-box.excluded {
+        background-color: #f44336; /* Red - rejected/blocked */
     }
 
     .color-box.optimized {
@@ -715,10 +847,17 @@
                     {selectedState}, 
                 {/if}
                 {selectedCountry}
-            </strong>, there are <strong>{holidays.length}</strong> public holidays{#if visibleHolidaysCount < holidays.length}&nbsp;(<strong>{visibleHolidaysCount} selected</strong>){/if} in&nbsp;<strong>{year}</strong>. 
+            </strong>, there are <strong>{holidays.length}</strong> public holidays{#if visibleHolidaysCount < holidays.length}&nbsp;(<strong>{visibleHolidaysCount} selected</strong>){/if} from <strong>{new Date(startDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</strong> to <strong>{(ptoExpiryDate ? new Date(ptoExpiryDate) : new Date(getDefaultExpiryDate(startDate))).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</strong>. 
         </p>
         <p>
-            Let's stretch your time off from <strong>{daysOff}&nbsp;days</strong> to <strong>{consecutiveDaysOff.reduce((total, group) => total + group.totalDays, 0)}&nbsp;days</strong> (<a href="#how-it-works" on:click={toggleHowItWorks}>how?</a>)
+            {#if chosenDaysOff.length + optimizedDaysOff.length > 0}
+                Using <strong>{chosenDaysOff.length + optimizedDaysOff.length} PTO days</strong>{#if chosenDaysOff.length > 0 || excludedDaysOff.length > 0} (<strong>{chosenDaysOff.length}</strong> chosen, <strong>{optimizedDaysOff.length}</strong> optimized{#if excludedDaysOff.length > 0}, <strong>{excludedDaysOff.length}</strong> excluded{/if}){/if}, you get <strong>{consecutiveDaysOff.reduce((total, group) => total + group.fullConsecutiveDays, 0)}&nbsp;days</strong> of time off! 
+            {:else}
+                Configure your PTO days below to see the magic ✨
+            {/if}
+            {#if chosenDaysOff.length + optimizedDaysOff.length > 0}
+                (<a href="#how-it-works" on:click={toggleHowItWorks}>how?</a>)
+            {/if}
         </p>
     </div>
 
@@ -750,14 +889,61 @@
                 <span class="bold">{daysOff}</span>
                 <button on:click={() => { daysOff++; updateHolidays(); }} aria-label="Increase days off">▲</button>
             </span>
-            days&nbsp;off in
-            <span class="arrow-controls">
-                <button on:click={() => { year--; updateHolidays(); }} aria-label="Previous year">◀</button>
-                <span class="bold">{year}</span>
-                <button on:click={() => { year++; updateHolidays(); }} aria-label="Next year">▶</button>
-            </span>
+            days&nbsp;off
         </p>
-        {#if year !== defaultYear || selectedCountry !== defaultCountry || daysOff !== defaultDaysOff}
+        <p>
+            Calendar starts on:
+            <input 
+                type="date" 
+                bind:value={startDate}
+                aria-label="Calendar start date"
+                style="margin: 0 5px; font-size: 1em; padding: 8px; background-color: transparent; border: 1px solid #555; border-radius: 5px; color: #fff;"
+            />
+            {#if startDate !== new Date().toISOString().split('T')[0]}
+                <button on:click={() => { startDate = new Date().toISOString().split('T')[0]; }} aria-label="Reset to today" style="width: auto; padding: 5px 10px;">Today</button>
+            {/if}
+        </p>
+        <p>
+            PTO expires on:
+            <input 
+                type="date" 
+                bind:value={ptoExpiryDate}
+                placeholder="Optional"
+                aria-label="PTO expiry date"
+                style="margin: 0 5px; font-size: 1em; padding: 8px; background-color: transparent; border: 1px solid #555; border-radius: 5px; color: #fff;"
+            />
+            {#if ptoExpiryDate}
+                <button on:click={() => { ptoExpiryDate = ''; }} aria-label="Clear expiry date" style="width: auto; padding: 5px 10px;">Clear</button>
+            {/if}
+        </p>
+        
+        <p style="margin: 15px 0; font-size: 0.9em;">
+            <span style="color: #888;">Quick presets:</span>
+            <button on:click={() => setDateRangePreset('rest-of-year')} aria-label="Rest of this year" style="width: auto; padding: 5px 10px; margin: 0 5px; font-size: 0.85em;">
+                Rest of {new Date().getFullYear()}
+            </button>
+            <button on:click={() => setDateRangePreset('6-months')} aria-label="Next 6 months" style="width: auto; padding: 5px 10px; margin: 0 5px; font-size: 0.85em;">
+                Next 6 months
+            </button>
+            <button on:click={() => setDateRangePreset('12-months')} aria-label="Next 12 months" style="width: auto; padding: 5px 10px; margin: 0 5px; font-size: 0.85em;">
+                Next 12 months
+            </button>
+        </p>
+        
+        {#if ptoExpiryDate && startDate && new Date(ptoExpiryDate) < new Date(startDate)}
+            <p style="color: #ff9800; font-size: 0.9em; margin: 10px 0;">
+                ⚠️ Expiry date is before start date. Please adjust your dates.
+            </p>
+        {:else}
+            <p style="color: #888; font-size: 0.9em; margin: 10px 0;">
+                📅 Showing <strong>{dateRangeStats.months} month{dateRangeStats.months !== 1 ? 's' : ''}</strong> ({dateRangeStats.days} days)
+                {#if remainingPtoDays > 0}
+                    • <span style="color: #4CAF50;">{remainingPtoDays} PTO day{remainingPtoDays !== 1 ? 's' : ''} remaining</span>
+                {/if}
+            </p>
+        {/if}
+        
+        {#if selectedCountry !== defaultCountry || daysOff !== defaultDaysOff}
             <a href="#" on:click|preventDefault={resetToDefault} class="reset-link">Reset to my country</a>
         {/if}
 
@@ -770,16 +956,6 @@
 
     <div class="content-box" id="calendar">
         <div class="calendar-key">
-            <div class="key-item">
-                <div class="key-label">
-                    <span class="color-box chosen"></span>
-                    <span class="color-box optimized"></span>
-                    <span>Day Off</span>
-                </div>
-                <a href="#" on:click|preventDefault={() => showDaysOffSetting = !showDaysOffSetting} class="edit-link">
-                    (edit)
-                </a>
-            </div>
             <div class="key-item">
                 <div class="key-label">
                     <span class="color-box holiday"></span>
@@ -800,31 +976,33 @@
                     (edit)
                 </a>
             </div>
+            <div class="key-item">
+                <div class="key-label">
+                    <span class="color-box chosen"></span>
+                    <span>Chosen (manual)</span>
+                </div>
+            </div>
+            <div class="key-item">
+                <div class="key-label">
+                    <span class="color-box optimized"></span>
+                    <span>Optimized (recommended)</span>
+                </div>
+            </div>
+            <div class="key-item">
+                <div class="key-label">
+                    <span class="color-box excluded"></span>
+                    <span>Excluded (do not use)</span>
+                </div>
+            </div>
         </div>
 
-        {#if showDaysOffSetting || showHolidaysList || showWeekendSettings}
-        <div class="holidays-list">
-            {#if showDaysOffSetting}
-                <div class="settings-section">
-                    <h3>Choose Days Off</h3>
-                    <ul>
-                        {#each chosenDaysOff as dayOff}
-                            <li>
-                                <div class="setting-item-label">
-                                    <span class="color-box chosen"></span>
-                                    <span>
-                                        {formatDate(dayOff)} 
-                                        <button type="submit" on:click={() => removeChosen(dayOff)}>Remove</button>
-                                    </span>
-                                </div>
-                            </li>
-                        {/each}
-                    </ul>
-                    <DateInput bind:value={date} max={getMaxDate()} min={getMinDate()} format="yyyy-MM-dd" />
-                    <button type="submit" on:click={() => onChosenDaysOff(date)}>Submit</button>
-                </div>
-            {/if}
+        <p style="text-align: center; color: #888; font-size: 0.85em; margin: 10px 0;">
+            💡 Click on any working day to add or remove it from your chosen days off<br/>
+            <span style="font-size: 0.9em;">Hold Ctrl/Cmd and click on any working day to exclude it from optimization</span>
+        </p>
 
+        {#if showHolidaysList || showWeekendSettings}
+        <div class="holidays-list">
             {#if showHolidaysList}
                 <div class="settings-section">
                     <h3>Public Holidays</h3>
@@ -868,7 +1046,7 @@
         {/if}
 
         <div class="calendar-grid">
-            {#each months as month}
+            {#each monthsToDisplay as { year, month }}
                 <div class="calendar-container">
                     <CalendarMonth
                         bind:this={calendarComponent}
@@ -877,9 +1055,11 @@
                         holidays={holidays}
                         chosenDaysOff={chosenDaysOff}
                         optimizedDaysOff={optimizedDaysOff}
+                        excludedDaysOff={excludedDaysOff}
                         consecutiveDaysOff={consecutiveDaysOff}
                         selectedCountryCode={selectedCountryCode}
                         weekendDays={weekendDays}
+                        on:dayClick={handleDayClick}
                     />
                 </div>
             {/each}
