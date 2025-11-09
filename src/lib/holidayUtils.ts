@@ -91,10 +91,11 @@ function getWeekends(year: number, weekendDays: number[], startDate?: Date): Dat
 // Find gaps between days off that could be filled with PTO
 function findGaps(allDaysOff: Set<string>, year: number, weekendDays: number[], startDate?: Date) {
     const effectiveStartDate = startDate || new Date(year, 0, 1);
+    const endDate = new Date(year, 11, 31);
     const gaps = [];
     let gapStart = null;
 
-    for (let d = new Date(effectiveStartDate); d <= new Date(year, 11, 31); d.setDate(d.getDate() + 1)) {
+    for (let d = new Date(effectiveStartDate); d <= endDate; d.setDate(d.getDate() + 1)) {
         if (!allDaysOff.has(dateKey(d)) && !isWeekend(d, weekendDays)) {
             if (!gapStart) gapStart = new Date(d);
         } else if (gapStart) {
@@ -105,6 +106,15 @@ function findGaps(allDaysOff: Set<string>, year: number, weekendDays: number[], 
             gapStart = null;
         }
     }
+    
+    // Handle gap that extends to the end of the year
+    if (gapStart) {
+        const gapLength = daysBetween(gapStart, new Date(endDate.getTime() + MS_IN_A_DAY));
+        if (gapLength > 0 && gapLength <= MAX_GAP_LENGTH) {
+            gaps.push({ start: gapStart, end: endDate, gapLength });
+        }
+    }
+    
     return gaps;
 }
 
