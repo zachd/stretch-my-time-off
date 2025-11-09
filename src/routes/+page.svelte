@@ -17,6 +17,7 @@
     let daysOff: number = 0;
     let optimizedDaysOff: Date[] = [];
     let consecutiveDaysOff: Array<{ startDate: Date; endDate: Date; totalDays: number }> = [];
+    let fixedDaysOff: Date[] = [];
     let showExcludedMonths: boolean = true;
     let visibleMonths: number[] = [];
     let countriesInput: HTMLInputElement | null = null;
@@ -35,6 +36,7 @@
     let showHolidaysList: boolean = false;
 
     let showWeekendSettings: boolean = false;
+    let showFixedDaysOffList: boolean = false;
     let weekendDays: number[] = [];
 
     // Start date state
@@ -48,9 +50,15 @@
         updateHolidays();
     }
 
-    // Reactive: when year changes, load start date for that year
+    // Reactive: when fixedDaysOff changes, update calculations
+    $: if (fixedDaysOff) {
+        updateHolidays();
+    }
+
+    // Reactive: when year changes, load start date and fixed days off for that year
     $: if (year !== undefined && year) {
         startDate = getStartDate(year);
+        loadFixedDaysOff(year);
     }
     
     // Reactive: when startDate or year changes, update excluded months visibility
@@ -108,6 +116,7 @@
                 selectedStateCode = '';
             }
             startDate = getStartDate(year);
+            loadFixedDaysOff(year);
             // showExcludedMonths will be set by reactive statement
             updateHolidays();
         });
@@ -166,13 +175,36 @@
                 hidden: isHolidayHidden(holiday)
             }));
             const visibleHolidays = holidays.filter(h => !h.hidden);
-            optimizedDaysOff = optimizeDaysOff(visibleHolidays, year, daysOff, weekendDays, startDate);
-            consecutiveDaysOff = calculateConsecutiveDaysOff(visibleHolidays, optimizedDaysOff, year, weekendDays, startDate);
+            optimizedDaysOff = optimizeDaysOff(visibleHolidays, year, daysOff, weekendDays, startDate, fixedDaysOff);
+            consecutiveDaysOff = calculateConsecutiveDaysOff(visibleHolidays, optimizedDaysOff, year, weekendDays, startDate, fixedDaysOff);
         } else {
             holidays = [];
             optimizedDaysOff = [];
             consecutiveDaysOff = [];
         }
+    }
+
+    function toggleFixedDayOff(date: Date) {
+        // Normalize date to remove time component
+        const normalizedDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+        const dateKeyStr = dateKey(normalizedDate);
+        
+        // Check if date is already in fixedDaysOff
+        const existingIndex = fixedDaysOff.findIndex(d => dateKey(d) === dateKeyStr);
+        
+        if (existingIndex >= 0) {
+            // Remove if already exists
+            fixedDaysOff = fixedDaysOff.filter((_, i) => i !== existingIndex);
+        } else {
+            // Add if doesn't exist
+            fixedDaysOff = [...fixedDaysOff, normalizedDate];
+        }
+        
+        // Save to localStorage
+        saveFixedDaysOff(year);
+        
+        // Update calculations
+        updateHolidays();
     }
 
     function resetToDefault() {
@@ -335,6 +367,42 @@
         const month = String(date.getMonth() + 1).padStart(2, '0');
         const day = String(date.getDate()).padStart(2, '0');
         return `${year}-${month}-${day}`;
+    }
+
+    // Helper function to create a date key (same as in holidayUtils.ts)
+    function dateKey(date: Date): string {
+        return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+    }
+
+    // Load fixed days off for a given year from localStorage
+    function loadFixedDaysOff(year: number) {
+        try {
+            const stored = localStorage.getItem(`fixedDaysOff_${year}`);
+            if (stored) {
+                const dateStrings: string[] = JSON.parse(stored);
+                fixedDaysOff = dateStrings.map(dateStr => {
+                    const [y, m, d] = dateStr.split('-').map(Number);
+                    return new Date(y, m, d);
+                });
+            } else {
+                fixedDaysOff = [];
+            }
+        } catch (e) {
+            console.error('Error loading fixed days off:', e);
+            fixedDaysOff = [];
+        }
+    }
+
+    // Save fixed days off for a given year to localStorage
+    function saveFixedDaysOff(year: number) {
+        try {
+            const dateStrings = fixedDaysOff.map(date => 
+                `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`
+            );
+            localStorage.setItem(`fixedDaysOff_${year}`, JSON.stringify(dateStrings));
+        } catch (e) {
+            console.error('Error saving fixed days off:', e);
+        }
     }
 
     // Format start date for display
@@ -1088,6 +1156,9 @@
                     <span class="color-box optimized"></span>
                     <span>Day Off</span>
                 </div>
+                <a href="#" on:click|preventDefault={() => showFixedDaysOffList = !showFixedDaysOffList} class="edit-link">
+                    (edit)
+                </a>
             </div>
             <div class="key-item">
                 <div class="key-label">
@@ -1111,8 +1182,33 @@
             </div>
         </div>
 
-        {#if showHolidaysList || showWeekendSettings}
+        {#if showHolidaysList || showWeekendSettings || showFixedDaysOffList}
         <div class="holidays-list">
+            {#if showFixedDaysOffList}
+                <div class="settings-section">
+                    <h3>Fixed Days Off</h3>
+                    {#if fixedDaysOff.length > 0}
+                        <ul>
+                            {#each fixedDaysOff.sort((a, b) => a.getTime() - b.getTime()) as fixedDay}
+                                <li>
+                                    <div class="setting-item-label">
+                                        <span class="color-box optimized"></span>
+                                        <span>{formatDate(fixedDay)}</span>
+                                    </div>
+                                    <button on:click={() => toggleFixedDayOff(fixedDay)}>
+                                        Remove
+                                    </button>
+                                </li>
+                            {/each}
+                        </ul>
+                    {:else}
+                        <p style="color: #ccc; text-align: center; padding: 20px;">
+                            Tap on a calendar day below to select it as a fixed day off
+                        </p>
+                    {/if}
+                </div>
+            {/if}
+
             {#if showHolidaysList}
                 <div class="settings-section">
                     <h3>Public Holidays</h3>
@@ -1180,6 +1276,8 @@
                         consecutiveDaysOff={consecutiveDaysOff}
                         selectedCountryCode={selectedCountryCode}
                         weekendDays={weekendDays}
+                        fixedDaysOff={fixedDaysOff}
+                        onDayClick={toggleFixedDayOff}
                     />
                 </div>
             {/each}

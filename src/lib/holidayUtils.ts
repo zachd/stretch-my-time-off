@@ -31,11 +31,13 @@ export function getHolidaysForYear(countryCode: string, year: number, stateCode?
 }
 
 // Find optimal placement of PTO days to maximize consecutive time off
-export function optimizeDaysOff(holidays: { date: Date }[], year: number, daysOff: number, weekendDays: number[] = [0, 6], startDate?: Date): Date[] {
+export function optimizeDaysOff(holidays: { date: Date }[], year: number, daysOff: number, weekendDays: number[] = [0, 6], startDate?: Date, fixedDaysOff: Date[] = []): Date[] {
     const effectiveStartDate = startDate || new Date(year, 0, 1);
     const filteredHolidays = holidays.filter(h => h.date.getFullYear() === year && h.date >= effectiveStartDate);
+    const filteredFixedDaysOff = fixedDaysOff.filter(d => d.getFullYear() === year && d >= effectiveStartDate);
     const allDaysOff = new Set([
         ...filteredHolidays.map(h => dateKey(h.date)),
+        ...filteredFixedDaysOff.map(d => dateKey(d)),
         ...getWeekends(year, weekendDays, effectiveStartDate).map(d => dateKey(d))
     ]);
 
@@ -44,14 +46,16 @@ export function optimizeDaysOff(holidays: { date: Date }[], year: number, daysOf
 }
 
 // Calculate periods of consecutive days off (weekends + holidays + PTO)
-export function calculateConsecutiveDaysOff(holidays: { date: Date }[], optimizedDaysOff: Date[], year: number, weekendDays: number[] = [0, 6], startDate?: Date) {
+export function calculateConsecutiveDaysOff(holidays: { date: Date }[], optimizedDaysOff: Date[], year: number, weekendDays: number[] = [0, 6], startDate?: Date, fixedDaysOff: Date[] = []) {
     const effectiveStartDate = startDate || new Date(year, 0, 1);
     const filteredHolidays = holidays.filter(h => h.date >= effectiveStartDate);
     const filteredOptimizedDaysOff = optimizedDaysOff.filter(d => d >= effectiveStartDate);
+    const filteredFixedDaysOff = fixedDaysOff.filter(d => d >= effectiveStartDate);
     
     const allDaysOff = new Set([
         ...filteredHolidays.map(h => dateKey(h.date)),
         ...filteredOptimizedDaysOff.map(d => dateKey(d)),
+        ...filteredFixedDaysOff.map(d => dateKey(d)),
         ...getWeekends(year, weekendDays, effectiveStartDate).map(d => dateKey(d))
     ]);
 
@@ -63,14 +67,14 @@ export function calculateConsecutiveDaysOff(holidays: { date: Date }[], optimize
             currentGroup.push(new Date(d));
         } else if (currentGroup.length > 0) {
             if (isValidConsecutiveGroup(currentGroup, weekendDays)) {
-                consecutiveDaysOff.push(createPeriod(currentGroup, filteredOptimizedDaysOff));
+                consecutiveDaysOff.push(createPeriod(currentGroup, filteredOptimizedDaysOff, filteredFixedDaysOff));
             }
             currentGroup = [];
         }
     }
 
     if (currentGroup.length > 0 && isValidConsecutiveGroup(currentGroup, weekendDays)) {
-        consecutiveDaysOff.push(createPeriod(currentGroup, filteredOptimizedDaysOff));
+        consecutiveDaysOff.push(createPeriod(currentGroup, filteredOptimizedDaysOff, filteredFixedDaysOff));
     }
 
     return consecutiveDaysOff;
@@ -193,7 +197,7 @@ function isValidConsecutiveGroup(group: Date[], weekendDays: number[]): boolean 
 }
 
 // Create a period object from a group of consecutive days
-function createPeriod(group: Date[], optimizedDaysOff: Date[]) {
+function createPeriod(group: Date[], optimizedDaysOff: Date[], fixedDaysOff: Date[] = []) {
     return {
         startDate: group[0],
         endDate: group[group.length - 1],
