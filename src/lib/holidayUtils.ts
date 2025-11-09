@@ -1,7 +1,17 @@
 import Holidays from 'date-holidays';
+import type { ConsecutiveDaysOff } from './types';
 
 const MS_IN_A_DAY = 86400000;
 const MAX_GAP_LENGTH = 5;
+
+interface Gap {
+    start: Date;
+    end: Date;
+    gapLength: number;
+    chainLength?: number;
+    usedDaysOff?: number;
+    fillFrom?: 'start' | 'end';
+}
 
 // Core date helper functions
 const dateKey = (date: Date): string => `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
@@ -42,7 +52,7 @@ export function optimizeDaysOff(holidays: { date: Date }[], year: number, daysOf
 }
 
 // Calculate periods of consecutive days off (weekends + holidays + PTO)
-export function calculateConsecutiveDaysOff(holidays: { date: Date }[], optimizedDaysOff: Date[], year: number, weekendDays: number[] = [0, 6]) {
+export function calculateConsecutiveDaysOff(holidays: { date: Date }[], optimizedDaysOff: Date[], year: number, weekendDays: number[] = [0, 6]): ConsecutiveDaysOff[] {
     const allDaysOff = new Set([
         ...holidays.map(h => dateKey(h.date)),
         ...optimizedDaysOff.map(d => dateKey(d)),
@@ -82,7 +92,7 @@ function getWeekends(year: number, weekendDays: number[]): Date[] {
 }
 
 // Find gaps between days off that could be filled with PTO
-function findGaps(allDaysOff: Set<string>, year: number, weekendDays: number[]) {
+function findGaps(allDaysOff: Set<string>, year: number, weekendDays: number[]): Gap[] {
     const gaps = [];
     let gapStart = null;
 
@@ -101,7 +111,7 @@ function findGaps(allDaysOff: Set<string>, year: number, weekendDays: number[]) 
 }
 
 // Rank gaps by how efficiently they can be used to create longer periods off
-function rankGapsByEfficiency(gaps: any[], allDaysOff: Set<string>, weekendDays: number[]) {
+function rankGapsByEfficiency(gaps: Gap[], allDaysOff: Set<string>, weekendDays: number[]): Gap[] {
     return gaps
         .map(gap => {
             const [backward, forward] = ['backward', 'forward'].map(direction => 
@@ -109,8 +119,8 @@ function rankGapsByEfficiency(gaps: any[], allDaysOff: Set<string>, weekendDays:
             );
             return forward.chainLength > backward.chainLength || 
                    (forward.chainLength === backward.chainLength && forward.usedDaysOff <= backward.usedDaysOff)
-                ? { ...gap, ...forward, fillFrom: 'end' }
-                : { ...gap, ...backward, fillFrom: 'start' };
+                ? { ...gap, ...forward, fillFrom: 'end' as const }
+                : { ...gap, ...backward, fillFrom: 'start' as const };
         })
         .sort((a, b) => a.gapLength - b.gapLength || b.chainLength - a.chainLength || a.usedDaysOff - b.usedDaysOff);
 }
@@ -138,7 +148,7 @@ function calculateChain(date: Date, gapLength: number, allDaysOff: Set<string>, 
 }
 
 // Select optimal days off based on ranked gaps
-function selectDaysOff(rankedGaps: any[], daysOff: number, allDaysOff: Set<string>, weekendDays: number[]): Date[] {
+function selectDaysOff(rankedGaps: Gap[], daysOff: number, allDaysOff: Set<string>, weekendDays: number[]): Date[] {
     const selectedDays = [];
     let remainingDays = daysOff;
 
@@ -175,7 +185,7 @@ function isValidConsecutiveGroup(group: Date[], weekendDays: number[]): boolean 
 }
 
 // Create a period object from a group of consecutive days
-function createPeriod(group: Date[], optimizedDaysOff: Date[]) {
+function createPeriod(group: Date[], optimizedDaysOff: Date[]): ConsecutiveDaysOff {
     return {
         startDate: group[0],
         endDate: group[group.length - 1],

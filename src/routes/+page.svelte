@@ -1,22 +1,43 @@
 <script lang="ts">
-    import { onMount } from 'svelte';
-    import countries from 'i18n-iso-countries';
-    import enLocale from 'i18n-iso-countries/langs/en.json';
+    import { onMount, onDestroy } from 'svelte';
+    import type { Holiday, ConsecutiveDaysOff } from '../lib/types';
     import CalendarMonth from '../lib/CalendarMonth.svelte';
-    import { getHolidaysForYear, optimizeDaysOff, calculateConsecutiveDaysOff } from '../lib/holidayUtils';
+    import HolidaySettings from '../lib/components/HolidaySettings.svelte';
+    import WeekendSettings from '../lib/components/WeekendSettings.svelte';
     import { ptoData } from '../lib/ptoData';
-    import Holidays from 'date-holidays';
-
-    countries.registerLocale(enLocale);
-    let countriesList: Record<string, string> = countries.getNames('en');
+    import { 
+        getFlagEmoji, 
+        formatDate, 
+        getOrderedDays, 
+        adjustInputWidth,
+        getAppState, 
+        saveAppState, 
+        getWeekendDays, 
+        setWeekendDays,
+        getCountryCodeFromName,
+        getDefaultDaysOff,
+        toggleWeekendDay as toggleWeekendDayUtil
+    } from '../lib/utils';
+    import { 
+        countriesList, 
+        fetchCountryCode, 
+        handleCountryChange as handleCountryChangeHelper,
+        handleStateChange as handleStateChangeHelper,
+        updateStatesList 
+    } from '../lib/composables/useAppState';
+    import { 
+        updateHolidays as updateHolidaysHelper,
+        toggleHolidayVisibility as toggleHolidayVisibilityHelper
+    } from '../lib/composables/useHolidays';
+    import { createKeyboardHandler } from '../lib/composables/useKeyboardNavigation';
 
     let year: number;
     let months: number[] = Array.from({ length: 12 }, (_, i) => i);
     let selectedCountry: string = '';
-    let holidays: Array<{ date: Date; name: string; hidden?: boolean }> = [];
+    let holidays: Holiday[] = [];
     let daysOff: number = 0;
     let optimizedDaysOff: Date[] = [];
-    let consecutiveDaysOff: Array<{ startDate: Date; endDate: Date; totalDays: number }> = [];
+    let consecutiveDaysOff: ConsecutiveDaysOff[] = [];
     let countriesInput: HTMLInputElement | null = null;
     let statesInput: HTMLInputElement | null = null;
     let showHowItWorks: boolean = false;
@@ -31,112 +52,18 @@
     let statesList: Record<string, string> = {};
 
     let showHolidaysList: boolean = false;
-
     let showWeekendSettings: boolean = false;
     let weekendDays: number[] = [];
 
-    $: selectedCountryCode = Object.keys(countriesList).find(code => countriesList[code] === selectedCountry) || '';
+    $: selectedCountryCode = getCountryCodeFromName(selectedCountry, countriesList);
 
-    $: if (selectedCountryCode || selectedStateCode || daysOff || year) {
-        updateHolidays();
-    }
-
-    $: if (daysOff) {
-        localStorage.setItem('daysOff', daysOff.toString());
-    }
-
-    $: if (year) {
-        localStorage.setItem('year', year.toString());
-    }
-
-    function updateStatesList(countryCode: string) {
-        const hd = new Holidays(countryCode);
-        statesList = hd.getStates(countryCode) || {};
-    }
-
-    function handleStateChange(event: Event) {
-        const target = event.target as HTMLInputElement;
-        const stateName = target.value;
-        selectedStateCode = Object.keys(statesList).find(code => statesList[code] === stateName) || '';
-        selectedState = stateName;
-        localStorage.setItem('selectedState', selectedState);
-        localStorage.setItem('selectedStateCode', selectedStateCode);
-    }
-
-    onMount(() => {
-
-        fetchCountryCode().then(() => {
-            defaultYear = new Date().getFullYear();
-            defaultCountry = selectedCountry;
-            defaultDaysOff = ptoData[selectedCountryCode] || 0;
-
-            const storedYear = localStorage.getItem('year');
-            const storedCountry = localStorage.getItem('selectedCountry');
-            const storedDaysOff = localStorage.getItem('daysOff');
-            const storedState = localStorage.getItem('selectedState');
-            const storedStateCode = localStorage.getItem('selectedStateCode');
-
-            year = storedYear ? parseInt(storedYear, 10) : defaultYear;
-            selectedCountry = storedCountry || defaultCountry;
-            daysOff = storedDaysOff ? parseInt(storedDaysOff, 10) : defaultDaysOff;
-            selectedState = storedState || '';
-            selectedStateCode = storedStateCode || '';
-            updateHolidays();
-        });
-
+    function updateHolidays(): void {
         if (selectedCountryCode) {
-            updateStatesList(selectedCountryCode);
-        }
-        window.addEventListener('keydown', handleKeyDown);
-
-        // Load weekend days from localStorage or set defaults
-        const storedWeekendDays = localStorage.getItem('weekendDays');
-        weekendDays = storedWeekendDays 
-            ? JSON.parse(storedWeekendDays) 
-            : [6, 0]; // Default to Saturday (6) and Sunday (0)
-        
-        localStorage.setItem('weekendDays', JSON.stringify(weekendDays));
-    });
-
-    async function fetchCountryCode() {
-        try {
-            const response = await fetch('https://stretchmytimeoff.com/cdn-cgi/trace');
-            const text = await response.text();
-            const countryCodeMatch = text.match(/loc=(\w+)/);
-            const countryCode = countryCodeMatch ? countryCodeMatch[1] : '';
-            selectedCountry = countriesList[countryCode] || '';
-        } catch (error) {
-            console.error('Error fetching country code:', error);
-        }
-    }
-
-    function handleCountryChange(event: Event) {
-        const target = event.target as HTMLInputElement;
-        const fullValue = target.value;
-        if (selectedCountryCode) {
-            daysOff = ptoData[selectedCountryCode] || 0;
-            selectedState = ''; // Reset state
-            selectedStateCode = ''; // Reset state code
-            updateStatesList(selectedCountryCode); // Update states list for the new country
-            localStorage.setItem('selectedCountry', selectedCountry);
-            localStorage.setItem('selectedState', selectedState);
-            localStorage.setItem('selectedStateCode', selectedStateCode);
-            localStorage.setItem('daysOff', daysOff.toString());
-        }
-    }
-
-    function updateHolidays() {
-        if (selectedCountryCode) {
-            updateStatesList(selectedCountryCode);
-            let allHolidays = getHolidaysForYear(selectedCountryCode, year, selectedStateCode);
-            holidays = allHolidays.map(holiday => ({
-                ...holiday,
-                date: new Date(holiday.date),
-                hidden: isHolidayHidden(holiday)
-            }));
-            const visibleHolidays = holidays.filter(h => !h.hidden);
-            optimizedDaysOff = optimizeDaysOff(visibleHolidays, year, daysOff, weekendDays);
-            consecutiveDaysOff = calculateConsecutiveDaysOff(visibleHolidays, optimizedDaysOff, year, weekendDays);
+            statesList = updateStatesList(selectedCountryCode);
+            const result = updateHolidaysHelper(selectedCountryCode, selectedStateCode, year, daysOff, weekendDays);
+            holidays = result.holidays;
+            optimizedDaysOff = result.optimizedDaysOff;
+            consecutiveDaysOff = result.consecutiveDaysOff;
         } else {
             holidays = [];
             optimizedDaysOff = [];
@@ -144,70 +71,66 @@
         }
     }
 
-    function resetToDefault() {
+    $: if (selectedCountryCode || selectedStateCode || daysOff || year) {
+        updateHolidays();
+    }
+
+    $: if (daysOff) {
+        saveAppState({ daysOff });
+    }
+
+    $: if (year) {
+        saveAppState({ year });
+    }
+
+    function handleStateChange(event: Event): void {
+        const target = event.target as HTMLInputElement;
+        const stateName = target.value;
+        handleStateChangeHelper(stateName, statesList, 
+            (state) => { selectedState = state; },
+            (code) => { selectedStateCode = code; }
+        );
+    }
+
+    function handleCountryChange(event: Event): void {
+        const target = event.target as HTMLInputElement;
+        if (selectedCountryCode) {
+            handleCountryChangeHelper(selectedCountry, selectedCountryCode,
+                (days) => { daysOff = days; },
+                (state) => { selectedState = state; },
+                (code) => { selectedStateCode = code; }
+            );
+            statesList = updateStatesList(selectedCountryCode);
+        }
+    }
+
+    function resetToDefault(): void {
         year = defaultYear;
         selectedCountry = defaultCountry;
         selectedState = '';
         selectedStateCode = '';
         daysOff = defaultDaysOff;
-        localStorage.setItem('year', year.toString());
-        localStorage.setItem('selectedCountry', selectedCountry);
-        localStorage.setItem('selectedState', selectedState);
-        localStorage.setItem('selectedStateCode', selectedStateCode);
-        localStorage.setItem('daysOff', daysOff.toString());
+        saveAppState({
+            year,
+            selectedCountry,
+            selectedState,
+            selectedStateCode,
+            daysOff
+        });
     }
 
-    function handleKeyDown(event: KeyboardEvent) {
-        switch (event.key) {
-            case 'ArrowRight':
-                event.preventDefault();
-                year++;
-                updateHolidays();
-                break;
-            case 'ArrowLeft':
-                event.preventDefault();
-                year--;
-                updateHolidays();
-                break;
-            case 'ArrowUp':
-                event.preventDefault();
-                daysOff++;
-                updateHolidays();
-                break;
-            case 'ArrowDown':
-                event.preventDefault();
-                if (daysOff > 0) {
-                    daysOff--;
-                    updateHolidays();
-                }
-                break;
-        }
+    function toggleHolidayVisibility(holiday: Holiday): void {
+        holidays = toggleHolidayVisibilityHelper(holiday, selectedCountryCode, holidays);
+        updateHolidays();
     }
 
-    function adjustInputWidth(inputElement: HTMLInputElement | null, value: string) {
-        if (typeof window !== 'undefined' && inputElement) {
-            const tempSpan = document.createElement('span');
-            tempSpan.style.visibility = 'hidden';
-            tempSpan.style.position = 'absolute';
-            tempSpan.style.whiteSpace = 'nowrap';
-            tempSpan.textContent = value || inputElement.value || inputElement.placeholder;
-            document.body.appendChild(tempSpan);
-            inputElement.style.width = `${tempSpan.offsetWidth + 30}px`;
-            document.body.removeChild(tempSpan);
-        }
+    function toggleWeekendDay(dayNumber: number): void {
+        weekendDays = toggleWeekendDayUtil(weekendDays, dayNumber);
+        setWeekendDays(weekendDays);
+        updateHolidays();
     }
 
-    $: if (countriesInput) adjustInputWidth(countriesInput, selectedCountry);
-    $: if (statesInput) adjustInputWidth(statesInput, selectedState);
-
-    function getFlagEmoji(countryCode: string) {
-        if (!countryCode) return '';
-        return countryCode
-            .toUpperCase()
-            .replace(/./g, char => String.fromCodePoint(127397 + char.charCodeAt(0)));
-    }
-
-    function toggleHowItWorks() {
+    function toggleHowItWorks(): void {
         showHowItWorks = !showHowItWorks;
         if (showHowItWorks) {
             const howItWorksElement = document.querySelector('.how-it-works');
@@ -217,80 +140,70 @@
         }
     }
 
-    function toggleHolidayVisibility(holiday: { date: Date; name: string; hidden?: boolean }) {
-        if (!selectedCountryCode) return;
-
-        const storageKey = `hiddenHolidays_${selectedCountryCode}`;
-        let hiddenHolidays = JSON.parse(localStorage.getItem(storageKey) || '{}');
-
-        hiddenHolidays[holiday.date.toString()] = !hiddenHolidays[holiday.date.toString()];
-        localStorage.setItem(storageKey, JSON.stringify(hiddenHolidays));
-
-        holidays = holidays.map(h => {
-            if (h.date === holiday.date) {
-                return { ...h, hidden: hiddenHolidays[h.date.toString()] };
-            }
-            return h;
-        });
-
-        updateHolidays();
-    }
-
-    function isHolidayHidden(holiday: { date: Date; name: string; hidden?: boolean }) {
-        if (!selectedCountryCode) return false;
-
-        const storageKey = `hiddenHolidays_${selectedCountryCode}`;
-        const hiddenHolidays = JSON.parse(localStorage.getItem(storageKey) || '{}');
-
-        return hiddenHolidays[holiday.date.toString()] || false;
-    }
-
-    function formatDate(date: Date) {
-        const options: Intl.DateTimeFormatOptions = { day: '2-digit', month: 'short', year: 'numeric' };
-        return new Date(date).toLocaleDateString('en-GB', options);
-    }
-
     $: visibleHolidaysCount = holidays.filter(h => !h.hidden).length;
 
-    function toggleWeekendDay(dayNumber: number) {
-        if (weekendDays.includes(dayNumber)) {
-            weekendDays = weekendDays.filter(d => d !== dayNumber);
-        } else {
-            weekendDays = [...weekendDays, dayNumber];
-        }
-        weekendDays.sort();
-        localStorage.setItem('weekendDays', JSON.stringify(weekendDays));
-        updateHolidays();
-    }
+    $: if (countriesInput) adjustInputWidth(countriesInput, selectedCountry);
+    $: if (statesInput) adjustInputWidth(statesInput, selectedState);
 
-    function getFirstDayOfWeek(locale: string): number {
-        const normalizedLocale = locale.toLowerCase() === 'us' ? 'en-US' : `en-${locale.toUpperCase()}`;
-        try {
-            // @ts-ignore
-            const weekFirstDay = new Intl.Locale(normalizedLocale)?.weekInfo?.firstDay;
-            if (weekFirstDay !== undefined) {
-                return weekFirstDay;
+    const handleKeyDown = createKeyboardHandler(
+        () => year,
+        (value) => { year = value; },
+        () => daysOff,
+        (value) => { daysOff = value; },
+        () => updateHolidays()
+    );
+
+    onMount(() => {
+        fetchCountryCode().then((country) => {
+            selectedCountry = country;
+            defaultYear = new Date().getFullYear();
+            defaultCountry = selectedCountry;
+            
+            // Calculate country code immediately from country name
+            const countryCode = getCountryCodeFromName(country, countriesList);
+            defaultDaysOff = getDefaultDaysOff(countryCode, ptoData);
+
+            const stored = getAppState(defaultYear, defaultCountry, defaultDaysOff);
+            year = stored.year;
+            selectedCountry = stored.selectedCountry || defaultCountry;
+            selectedState = stored.selectedState;
+            selectedStateCode = stored.selectedStateCode;
+            
+            // Recalculate country code after setting selectedCountry
+            const currentCountryCode = getCountryCodeFromName(selectedCountry, countriesList);
+            const countryDefaultDaysOff = getDefaultDaysOff(currentCountryCode, ptoData);
+            
+            // Use stored daysOff if it exists and is valid, otherwise use the default for the current country
+            if (stored.daysOff && stored.daysOff > 0) {
+                daysOff = stored.daysOff;
+            } else {
+                daysOff = countryDefaultDaysOff;
+                // Save the default to localStorage so it persists
+                if (countryDefaultDaysOff > 0) {
+                    saveAppState({ daysOff: countryDefaultDaysOff });
+                }
             }
-        } catch (e) {
-            // Fallback if weekInfo is not supported
-        }
-        return normalizedLocale === 'en-US' ? 0 : 1;
-    }
+            
+            if (currentCountryCode) {
+                statesList = updateStatesList(currentCountryCode);
+            }
+            updateHolidays();
+        });
 
-    function getOrderedDays() {
-        const days = [
-            { name: 'Sunday', index: 0 },
-            { name: 'Monday', index: 1 },
-            { name: 'Tuesday', index: 2 },
-            { name: 'Wednesday', index: 3 },
-            { name: 'Thursday', index: 4 },
-            { name: 'Friday', index: 5 },
-            { name: 'Saturday', index: 6 }
-        ];
-        
-        const firstDay = getFirstDayOfWeek(selectedCountryCode || 'US');
-        return [...days.slice(firstDay), ...days.slice(0, firstDay)];
-    }
+        // Load weekend days from localStorage
+        weekendDays = getWeekendDays();
+        setWeekendDays(weekendDays);
+
+        if (typeof window !== 'undefined') {
+            window.addEventListener('keydown', handleKeyDown);
+        }
+    });
+
+    onDestroy(() => {
+        if (typeof window !== 'undefined') {
+            window.removeEventListener('keydown', handleKeyDown);
+        }
+    });
 </script>
 
 <style>
@@ -740,43 +653,11 @@
         {#if showHolidaysList || showWeekendSettings}
         <div class="holidays-list">
             {#if showHolidaysList}
-                <div class="settings-section">
-                    <h3>Public Holidays</h3>
-                    <ul>
-                        {#each holidays as holiday}
-                            <li>
-                                <div class="setting-item-label">
-                                    <span class="color-box holiday"></span>
-                                    <span class={holiday.hidden ? 'strikethrough' : ''}>
-                                        {formatDate(holiday.date)}: {holiday.name}
-                                    </span>
-                                </div>
-                                <button on:click={() => toggleHolidayVisibility(holiday)}>
-                                    {holiday.hidden ? 'Show' : 'Hide'}
-                                </button>
-                            </li>
-                        {/each}
-                    </ul>
-                </div>
+                <HolidaySettings {holidays} onToggle={toggleHolidayVisibility} />
             {/if}
 
             {#if showWeekendSettings}
-                <div class="settings-section">
-                    <h3>Weekend Days</h3>
-                    <ul>
-                        {#each getOrderedDays() as {name, index}}
-                            <li>
-                                <div class="setting-item-label">
-                                    <span class="color-box weekend"></span>
-                                    <span>{name}</span>
-                                </div>
-                                <button on:click={() => toggleWeekendDay(index)}>
-                                    {weekendDays.includes(index) ? 'Remove' : 'Add'}
-                                </button>
-                            </li>
-                        {/each}
-                    </ul>
-                </div>
+                <WeekendSettings {weekendDays} {selectedCountryCode} onToggle={toggleWeekendDay} />
             {/if}
         </div>
         {/if}

@@ -1,31 +1,15 @@
 <script lang="ts">
     import Tooltip from './Tooltip.svelte';
+    import type { Holiday, ConsecutiveDaysOff } from './types';
+    import { getFirstDayOfWeek } from './utils';
 
     export let year: number;
     export let month: number;
-    export let holidays: Array<{ date: Date; name: string; hidden?: boolean }>;
+    export let holidays: Holiday[];
     export let optimizedDaysOff: Date[];
-    export let consecutiveDaysOff: Array<{ startDate: Date; endDate: Date; totalDays: number }>;
+    export let consecutiveDaysOff: ConsecutiveDaysOff[];
     export let selectedCountryCode: string;
     export let weekendDays: number[] = [6, 0];
-
-    // Function to determine the first day of the week based on locale
-    function getFirstDayOfWeek(locale: string): number {
-        const normalizedLocale = locale.toLowerCase() === 'us' ? 'en-US' : `en-${locale.toUpperCase()}`;
-    
-        try {
-            // @ts-ignore .weekInfo exists on all browsers except Firefox
-            const weekFirstDay = new Intl.Locale(normalizedLocale)?.weekInfo?.firstDay;
-            if (weekFirstDay !== undefined) {
-                return weekFirstDay;
-            }
-        } catch (e) {
-            // Fallback if weekInfo is not supported
-        }
-
-        // Fallback: US starts on Sunday (0), most others on Monday (1)
-        return normalizedLocale === 'en-US' ? 0 : 1;
-    }
 
     // Reactive declarations
     $: daysInMonth = getDaysInMonth(year, month);
@@ -41,7 +25,7 @@
         return new Date(year, month, 1).getDay();
     }
 
-    function getHoliday(day: number): { date: Date; name: string; hidden?: boolean } | undefined {
+    function getHoliday(day: number): Holiday | undefined {
         return holidays.find(holiday => 
             holiday.date.getFullYear() === year &&
             holiday.date.getMonth() === month &&
