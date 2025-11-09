@@ -31,49 +31,56 @@ export function getHolidaysForYear(countryCode: string, year: number, stateCode?
 }
 
 // Find optimal placement of PTO days to maximize consecutive time off
-export function optimizeDaysOff(holidays: { date: Date }[], year: number, daysOff: number, weekendDays: number[] = [0, 6]): Date[] {
+export function optimizeDaysOff(holidays: { date: Date }[], year: number, daysOff: number, weekendDays: number[] = [0, 6], startDate?: Date): Date[] {
+    const effectiveStartDate = startDate || new Date(year, 0, 1);
+    const filteredHolidays = holidays.filter(h => h.date.getFullYear() === year && h.date >= effectiveStartDate);
     const allDaysOff = new Set([
-        ...holidays.filter(h => h.date.getFullYear() === year).map(h => dateKey(h.date)),
-        ...getWeekends(year, weekendDays).map(d => dateKey(d))
+        ...filteredHolidays.map(h => dateKey(h.date)),
+        ...getWeekends(year, weekendDays, effectiveStartDate).map(d => dateKey(d))
     ]);
 
-    const gaps = findGaps(allDaysOff, year, weekendDays);
+    const gaps = findGaps(allDaysOff, year, weekendDays, effectiveStartDate);
     return selectDaysOff(rankGapsByEfficiency(gaps, allDaysOff, weekendDays), daysOff, allDaysOff, weekendDays);
 }
 
 // Calculate periods of consecutive days off (weekends + holidays + PTO)
-export function calculateConsecutiveDaysOff(holidays: { date: Date }[], optimizedDaysOff: Date[], year: number, weekendDays: number[] = [0, 6]) {
+export function calculateConsecutiveDaysOff(holidays: { date: Date }[], optimizedDaysOff: Date[], year: number, weekendDays: number[] = [0, 6], startDate?: Date) {
+    const effectiveStartDate = startDate || new Date(year, 0, 1);
+    const filteredHolidays = holidays.filter(h => h.date >= effectiveStartDate);
+    const filteredOptimizedDaysOff = optimizedDaysOff.filter(d => d >= effectiveStartDate);
+    
     const allDaysOff = new Set([
-        ...holidays.map(h => dateKey(h.date)),
-        ...optimizedDaysOff.map(d => dateKey(d)),
-        ...getWeekends(year, weekendDays).map(d => dateKey(d))
+        ...filteredHolidays.map(h => dateKey(h.date)),
+        ...filteredOptimizedDaysOff.map(d => dateKey(d)),
+        ...getWeekends(year, weekendDays, effectiveStartDate).map(d => dateKey(d))
     ]);
 
     const consecutiveDaysOff = [];
     let currentGroup = [];
 
-    for (let d = new Date(year, 0, 1); d <= new Date(year, 11, 31); d.setDate(d.getDate() + 1)) {
-        if (isWeekend(d, weekendDays) || isHoliday(d, holidays) || allDaysOff.has(dateKey(d))) {
+    for (let d = new Date(effectiveStartDate); d <= new Date(year, 11, 31); d.setDate(d.getDate() + 1)) {
+        if (isWeekend(d, weekendDays) || isHoliday(d, filteredHolidays) || allDaysOff.has(dateKey(d))) {
             currentGroup.push(new Date(d));
         } else if (currentGroup.length > 0) {
             if (isValidConsecutiveGroup(currentGroup, weekendDays)) {
-                consecutiveDaysOff.push(createPeriod(currentGroup, optimizedDaysOff));
+                consecutiveDaysOff.push(createPeriod(currentGroup, filteredOptimizedDaysOff));
             }
             currentGroup = [];
         }
     }
 
     if (currentGroup.length > 0 && isValidConsecutiveGroup(currentGroup, weekendDays)) {
-        consecutiveDaysOff.push(createPeriod(currentGroup, optimizedDaysOff));
+        consecutiveDaysOff.push(createPeriod(currentGroup, filteredOptimizedDaysOff));
     }
 
     return consecutiveDaysOff;
 }
 
 // Get all weekend days for a year
-function getWeekends(year: number, weekendDays: number[]): Date[] {
+function getWeekends(year: number, weekendDays: number[], startDate?: Date): Date[] {
+    const effectiveStartDate = startDate || new Date(year, 0, 1);
     const weekends = [];
-    for (let d = new Date(year, 0, 1); d <= new Date(year, 11, 31); d.setDate(d.getDate() + 1)) {
+    for (let d = new Date(effectiveStartDate); d <= new Date(year, 11, 31); d.setDate(d.getDate() + 1)) {
         if (d.getMonth() === d.getMonth() && isWeekend(d, weekendDays)) {
             weekends.push(new Date(d));
         }
@@ -82,11 +89,12 @@ function getWeekends(year: number, weekendDays: number[]): Date[] {
 }
 
 // Find gaps between days off that could be filled with PTO
-function findGaps(allDaysOff: Set<string>, year: number, weekendDays: number[]) {
+function findGaps(allDaysOff: Set<string>, year: number, weekendDays: number[], startDate?: Date) {
+    const effectiveStartDate = startDate || new Date(year, 0, 1);
     const gaps = [];
     let gapStart = null;
 
-    for (let d = new Date(year, 0, 1); d <= new Date(year, 11, 31); d.setDate(d.getDate() + 1)) {
+    for (let d = new Date(effectiveStartDate); d <= new Date(year, 11, 31); d.setDate(d.getDate() + 1)) {
         if (!allDaysOff.has(dateKey(d)) && !isWeekend(d, weekendDays)) {
             if (!gapStart) gapStart = new Date(d);
         } else if (gapStart) {

@@ -8,6 +8,8 @@
     export let consecutiveDaysOff: Array<{ startDate: Date; endDate: Date; totalDays: number }>;
     export let selectedCountryCode: string;
     export let weekendDays: number[] = [6, 0];
+    export let startDate: Date = new Date(year, 0, 1);
+    export let isActive: boolean = true;
 
     // Function to determine the first day of the week based on locale
     function getFirstDayOfWeek(locale: string): number {
@@ -84,12 +86,19 @@
         return weekendDays.includes(date.getDay());
     }
 
+    function isPastDate(day: number): boolean {
+        const date = new Date(year, month, day);
+        // Normalize startDate to current year for comparison
+        const startDateInYear = new Date(year, startDate.getMonth(), startDate.getDate());
+        return date < startDateInYear;
+    }
+
     const dayInitials = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
     $: orderedDayInitials = dayInitials.slice(firstDayOfWeek).concat(dayInitials.slice(0, firstDayOfWeek));
 </script>
 
-<div class="calendar">
+<div class="calendar {isActive ? '' : 'excluded-month'}">
     <div class="month-name">{new Date(year, month).toLocaleString('default', { month: 'long' })}</div>
     
     {#each orderedDayInitials as dayInitial}
@@ -101,7 +110,8 @@
     {/each}
     {#each Array.from({ length: daysInMonth }, (_, i) => i + 1) as day}
         {@const holiday = getHoliday(day)}
-        <div class="day {isWeekend(new Date(year, month, day)) ? 'weekend' : ''} {holiday ? 'holiday' : ''} {isOptimizedDayOff(day) ? 'optimized' : ''} {isConsecutiveDayOff(day) ? 'consecutive-day' : ''}">
+        {@const pastDate = isPastDate(day)}
+        <div class="day {isWeekend(new Date(year, month, day)) ? 'weekend' : ''} {holiday ? 'holiday' : ''} {isOptimizedDayOff(day) ? 'optimized' : ''} {isConsecutiveDayOff(day) ? 'consecutive-day' : ''} {pastDate ? 'past-date' : ''}">
             <span class={holiday?.hidden ? 'strikethrough' : ''}>{day}</span>
             {#if holiday}
                 <Tooltip text={holiday.name} />
@@ -136,6 +146,14 @@
         font-weight: bold;
         color: #c5c6c7;
         font-size: 0.6em;
+    }
+
+    .excluded-month .month-name {
+        color: #666;
+    }
+
+    .excluded-month .day-initial {
+        color: #666;
     }
     .day {
         aspect-ratio: 1;
@@ -201,5 +219,13 @@
     .strikethrough {
         text-decoration: line-through;
         opacity: 0.5;
+    }
+
+    .past-date {
+        opacity: 0.4;
+    }
+
+    .past-date span {
+        text-decoration: line-through;
     }
 </style> 
