@@ -78,7 +78,7 @@
         } else if (isOptimizedDayOff(day)) {
             return 'Day off (calculated)';
         } else {
-            return 'Tap to select fixed day off';
+            return 'Tap to add fixed day off';
         }
     }
 
@@ -228,7 +228,7 @@
         cursor: pointer;
     }
     .clickable:hover {
-        opacity: 0.8;
+        opacity: 0.7;
         transform: scale(1.05);
         transition: transform 0.1s, opacity 0.1s;
     }

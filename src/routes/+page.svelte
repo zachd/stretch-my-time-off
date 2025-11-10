@@ -46,19 +46,28 @@
 
     $: selectedCountryCode = Object.keys(countriesList).find(code => countriesList[code] === selectedCountry) || '';
 
-    $: if (selectedCountryCode || selectedStateCode || daysOff || year || startDate) {
+    // Reactive: when year changes, load start date and fixed days off for that year
+    $: if (year !== undefined && year && typeof window !== 'undefined') {
+        startDate = getStartDate(year);
+        loadFixedDaysOff(year);
+        // Adjust daysOff to include fixed days off if they exist
+        // Calculate base days off (total - fixed days)
+        const baseDaysOff = Math.max(0, daysOff - fixedDaysOff.length);
+        // If we have fixed days but base is 0, get the country default and add fixed days
+        if (fixedDaysOff.length > 0 && baseDaysOff === 0 && daysOff < fixedDaysOff.length) {
+            const countryCode = Object.keys(countriesList).find(code => countriesList[code] === selectedCountry) || '';
+            const currentDefaultDaysOff = ptoData[countryCode] || 0;
+            daysOff = currentDefaultDaysOff + fixedDaysOff.length;
+        }
+    }
+
+    $: if (selectedCountryCode && year !== undefined && year) {
         updateHolidays();
     }
 
     // Reactive: when fixedDaysOff changes, update calculations
-    $: if (fixedDaysOff) {
+    $: if (fixedDaysOff && year !== undefined && year) {
         updateHolidays();
-    }
-
-    // Reactive: when year changes, load start date and fixed days off for that year
-    $: if (year !== undefined && year) {
-        startDate = getStartDate(year);
-        loadFixedDaysOff(year);
     }
     
     // Reactive: when startDate or year changes, update excluded months visibility
@@ -66,11 +75,11 @@
         showExcludedMonths = !hasExcludedMonths();
     }
 
-    $: if (daysOff) {
+    $: if (daysOff !== undefined && typeof window !== 'undefined') {
         localStorage.setItem('daysOff', daysOff.toString());
     }
 
-    $: if (year) {
+    $: if (year && typeof window !== 'undefined') {
         localStorage.setItem('year', year.toString());
     }
 
@@ -104,7 +113,6 @@
 
             year = storedYear ? parseInt(storedYear, 10) : defaultYear;
             selectedCountry = storedCountry || defaultCountry;
-            daysOff = storedDaysOff ? parseInt(storedDaysOff, 10) : defaultDaysOff;
             
             // Load state per country
             const countryCode = Object.keys(countriesList).find(code => countriesList[code] === selectedCountry) || '';
@@ -115,8 +123,39 @@
                 selectedState = '';
                 selectedStateCode = '';
             }
+            
+            // Get the current country's default days off
+            const currentDefaultDaysOff = ptoData[countryCode] || 0;
+            
             startDate = getStartDate(year);
             loadFixedDaysOff(year);
+            
+            // Initialize daysOff: use stored value if it exists, otherwise use country default
+            // Then add fixed days off to it
+            if (storedDaysOff !== null && storedDaysOff !== '') {
+                const storedValue = parseInt(storedDaysOff, 10);
+                // If stored value is 0 and there are no fixed days, use default instead
+                if (storedValue === 0 && fixedDaysOff.length === 0) {
+                    daysOff = currentDefaultDaysOff;
+                } else {
+                    daysOff = storedValue;
+                }
+            } else {
+                // No stored value, use country default
+                daysOff = currentDefaultDaysOff;
+            }
+            
+            // Add fixed days off to the base days off
+            if (fixedDaysOff.length > 0) {
+                // Calculate base: if daysOff is less than fixed days, base is 0, otherwise subtract fixed days
+                const baseDaysOff = Math.max(0, daysOff - fixedDaysOff.length);
+                // If base is 0 and we have fixed days, set base to default and add fixed days
+                if (baseDaysOff === 0 && daysOff < fixedDaysOff.length) {
+                    daysOff = currentDefaultDaysOff + fixedDaysOff.length;
+                } else {
+                    daysOff = baseDaysOff + fixedDaysOff.length;
+                }
+            }
             // showExcludedMonths will be set by reactive statement
             updateHolidays();
         });
@@ -166,7 +205,7 @@
     }
 
     function updateHolidays() {
-        if (selectedCountryCode) {
+        if (selectedCountryCode && year !== undefined && year) {
             updateStatesList(selectedCountryCode);
             let allHolidays = getHolidaysForYear(selectedCountryCode, year, selectedStateCode);
             holidays = allHolidays.map(holiday => ({
@@ -175,7 +214,10 @@
                 hidden: isHolidayHidden(holiday)
             }));
             const visibleHolidays = holidays.filter(h => !h.hidden);
-            optimizedDaysOff = optimizeDaysOff(visibleHolidays, year, daysOff, weekendDays, startDate, fixedDaysOff);
+            // Use baseDaysOff for optimization (not including fixed days in the budget)
+            // Calculate it here to ensure it's always defined
+            const budgetDaysOff = Math.max(0, (daysOff || 0) - (fixedDaysOff?.length || 0));
+            optimizedDaysOff = optimizeDaysOff(visibleHolidays, year, budgetDaysOff, weekendDays, startDate, fixedDaysOff);
             consecutiveDaysOff = calculateConsecutiveDaysOff(visibleHolidays, optimizedDaysOff, year, weekendDays, startDate, fixedDaysOff);
         } else {
             holidays = [];
@@ -189,21 +231,32 @@
         const normalizedDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
         const dateKeyStr = dateKey(normalizedDate);
         
+        // Check if this day is already a day off for any reason (holiday, weekend, or optimized)
+        const isWeekendDay = weekendDays.includes(normalizedDate.getDay());
+        const isHolidayDay = holidays.some(h => datesMatch(h.date, normalizedDate));
+        const isOptimizedDay = optimizedDaysOff.some(d => datesMatch(d, normalizedDate));
+        const isAlreadyDayOff = isWeekendDay || isHolidayDay || isOptimizedDay;
+        
         // Check if date is already in fixedDaysOff
         const existingIndex = fixedDaysOff.findIndex(d => dateKey(d) === dateKeyStr);
         
         if (existingIndex >= 0) {
-            // Remove if already exists
+            // Remove if already exists - don't subtract from days off count
             fixedDaysOff = fixedDaysOff.filter((_, i) => i !== existingIndex);
         } else {
             // Add if doesn't exist
             fixedDaysOff = [...fixedDaysOff, normalizedDate];
+            // Only increase days off if this day isn't already a day off for another reason
+            if (!isAlreadyDayOff) {
+                daysOff++;
+            }
         }
         
         // Save to localStorage
         saveFixedDaysOff(year);
+        localStorage.setItem('daysOff', daysOff.toString());
         
-        // Update calculations
+        // Update calculations (using baseDaysOff for optimization)
         updateHolidays();
     }
 
@@ -243,7 +296,8 @@
                 break;
             case 'ArrowDown':
                 event.preventDefault();
-                if (daysOff > 0) {
+                const minDaysOff = fixedDaysOff.length;
+                if (daysOff > minDaysOff) {
                     daysOff--;
                     updateHolidays();
                 }
@@ -372,6 +426,13 @@
     // Helper function to create a date key (same as in holidayUtils.ts)
     function dateKey(date: Date): string {
         return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+    }
+
+    // Helper function to check if a date matches another date (ignoring time)
+    function datesMatch(date1: Date, date2: Date): boolean {
+        return date1.getFullYear() === date2.getFullYear() &&
+               date1.getMonth() === date2.getMonth() &&
+               date1.getDate() === date2.getDate();
     }
 
     // Load fixed days off for a given year from localStorage
@@ -1115,7 +1176,7 @@
                 aria-label="Select country" />
             and have 
             <span class="arrow-controls">
-                <button on:click={() => { if (daysOff > 0) { daysOff--; updateHolidays(); } }} aria-label="Decrease days off">▼</button>
+                <button on:click={() => { const minDaysOff = fixedDaysOff.length; if (daysOff > minDaysOff) { daysOff--; updateHolidays(); } }} aria-label="Decrease days off">▼</button>
                 <span class="bold">{daysOff}</span>
                 <button on:click={() => { daysOff++; updateHolidays(); }} aria-label="Increase days off">▲</button>
             </span>
