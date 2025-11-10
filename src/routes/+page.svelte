@@ -581,7 +581,7 @@
         const normalizedLocale = locale.toLowerCase() === 'us' ? 'en-US' : `en-${locale.toUpperCase()}`;
         try {
             // @ts-ignore
-            const weekFirstDay = new Intl.Locale(normalizedLocale)?.weekInfo?.firstDay;
+            const weekFirstDay = new Intl.Locale(normalizedLocale)?.getWeekInfo()?.firstDay;
             if (weekFirstDay !== undefined) {
                 return weekFirstDay;
             }
