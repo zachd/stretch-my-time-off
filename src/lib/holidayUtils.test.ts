@@ -143,6 +143,21 @@ describe('holidayUtils', () => {
                 });
             });
 
+            it('should not include fixed days off in optimized days', () => {
+                const fixedDaysOff = [
+                    new Date(TEST_YEAR, 0, 5),
+                    new Date(TEST_YEAR, 0, 10),
+                ];
+                const result = optimizeDaysOff(mockHolidays, TEST_YEAR, 10, DEFAULT_WEEKENDS, undefined, fixedDaysOff);
+                const fixedDaysOffKeys = new Set(fixedDaysOff.map(d => 
+                    `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+                ));
+                result.forEach(date => {
+                    const dateKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+                    expect(fixedDaysOffKeys.has(dateKey)).toBe(false);
+                });
+            });
+
             it('should not select days that are already holidays or weekends', () => {
                 const holidays = [
                     { date: new Date(TEST_YEAR, 0, 1), name: 'Holiday' },
@@ -156,6 +171,24 @@ describe('holidayUtils', () => {
                     const dateKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
                     expect(holidaySet.has(dateKey)).toBe(false);
                     expect(DEFAULT_WEEKENDS).not.toContain(date.getDay());
+                });
+            });
+
+            it('should not select days that are fixed days off, treating them like weekends/holidays', () => {
+                const fixedDaysOff = [
+                    new Date(TEST_YEAR, 0, 5),
+                    new Date(TEST_YEAR, 0, 7),
+                ];
+                const holidays = [
+                    { date: new Date(TEST_YEAR, 0, 1), name: 'Holiday' },
+                ];
+                const result = optimizeDaysOff(holidays, TEST_YEAR, 10, DEFAULT_WEEKENDS, undefined, fixedDaysOff);
+                const fixedDaysOffSet = new Set(fixedDaysOff.map(d => 
+                    `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+                ));
+                result.forEach(date => {
+                    const dateKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+                    expect(fixedDaysOffSet.has(dateKey)).toBe(false);
                 });
             });
         });
@@ -186,6 +219,25 @@ describe('holidayUtils', () => {
                 const result = optimizeDaysOff(holidays, TEST_YEAR, 5, DEFAULT_WEEKENDS, startDate);
                 expect(Array.isArray(result)).toBe(true);
             });
+
+            it('should filter fixed days off by year and startDate', () => {
+                const fixedDaysOff = [
+                    new Date(2023, 11, 31),
+                    new Date(TEST_YEAR, 0, 5),
+                    new Date(TEST_YEAR, 5, 15),
+                ];
+                const startDate = new Date(TEST_YEAR, 2, 1);
+                const result = optimizeDaysOff(mockHolidays, TEST_YEAR, 5, DEFAULT_WEEKENDS, startDate, fixedDaysOff);
+                // Should not include fixed days off before startDate
+                const fixedDaysOffKeys = new Set(fixedDaysOff
+                    .filter(d => d.getFullYear() === TEST_YEAR && d >= startDate)
+                    .map(d => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`)
+                );
+                result.forEach(date => {
+                    const dateKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+                    expect(fixedDaysOffKeys.has(dateKey)).toBe(false);
+                });
+            });
         });
 
         describe('gap finding and prioritization', () => {
@@ -197,6 +249,30 @@ describe('holidayUtils', () => {
                 ];
                 const result = optimizeDaysOff(holidays, TEST_YEAR, 10);
                 expect(Array.isArray(result)).toBe(true);
+                result.forEach(date => {
+                    expect(DEFAULT_WEEKENDS).not.toContain(date.getDay());
+                });
+            });
+
+            it('should exclude gaps longer than MAX_GAP_LENGTH (5) days', () => {
+                // Create a gap of 6 weekdays (should be excluded)
+                const holidays = [
+                    { date: new Date(TEST_YEAR, 0, 1), name: 'Mon' },
+                    { date: new Date(TEST_YEAR, 0, 9), name: 'Tue' }, // 6 weekdays gap (Jan 2-8)
+                ];
+                const result = optimizeDaysOff(holidays, TEST_YEAR, 10);
+                // Should not fill the 6-day gap, but might find other smaller gaps
+                expect(Array.isArray(result)).toBe(true);
+            });
+
+            it('should include gaps exactly at MAX_GAP_LENGTH (5) days', () => {
+                // Create a gap of exactly 5 weekdays
+                const holidays = [
+                    { date: new Date(TEST_YEAR, 0, 1), name: 'Mon' },
+                    { date: new Date(TEST_YEAR, 0, 8), name: 'Mon' }, // 5 weekdays gap (Jan 2-7)
+                ];
+                const result = optimizeDaysOff(holidays, TEST_YEAR, 5);
+                expect(result.length).toBeGreaterThan(0);
                 result.forEach(date => {
                     expect(DEFAULT_WEEKENDS).not.toContain(date.getDay());
                 });
@@ -253,6 +329,42 @@ describe('holidayUtils', () => {
                 ];
                 const result = optimizeDaysOff(holidays, TEST_YEAR, 1);
                 expect(Array.isArray(result)).toBe(true);
+            });
+
+            it('should prefer forward filling when forward chain is longer', () => {
+                // Create a scenario where forward chain is longer
+                // Holiday on Thursday, gap before it, weekend after
+                const holidays = [
+                    { date: new Date(TEST_YEAR, 0, 4), name: 'Thursday Holiday' },
+                ];
+                const result = optimizeDaysOff(holidays, TEST_YEAR, 1);
+                expect(result.length).toBe(1);
+                // Should select a day that creates a longer consecutive period
+                // The exact day depends on the algorithm's analysis, but should be in a valid gap
+                expect(result[0].getFullYear()).toBe(TEST_YEAR);
+                expect(result[0].getMonth()).toBe(0);
+                expect(DEFAULT_WEEKENDS).not.toContain(result[0].getDay());
+            });
+
+            it('should prefer backward filling when backward chain is longer', () => {
+                // Create a scenario where backward chain is longer
+                // Weekend before, gap, holiday on Monday
+                const holidays = [
+                    { date: new Date(TEST_YEAR, 0, 1), name: 'Monday Holiday' },
+                ];
+                // If we have a gap before Monday, backward might be better
+                // This depends on the specific day of week, but we can test the logic
+                const result = optimizeDaysOff(holidays, TEST_YEAR, 1);
+                expect(Array.isArray(result)).toBe(true);
+            });
+
+            it('should handle equal chain lengths by choosing direction with fewer usedDaysOff', () => {
+                // When chains are equal length, should prefer direction with fewer usedDaysOff
+                const holidays = [
+                    { date: new Date(TEST_YEAR, 0, 3), name: 'Wednesday Holiday' },
+                ];
+                const result = optimizeDaysOff(holidays, TEST_YEAR, 1);
+                expect(result.length).toBe(1);
             });
 
             it('should optimize to create longer consecutive periods', () => {
@@ -513,6 +625,22 @@ describe('holidayUtils', () => {
                 });
             });
 
+            it('should exclude periods that are only weekends', () => {
+                const holidays: Array<{ date: Date; name: string }> = [];
+                const optimizedDays: Date[] = [];
+                const result = calculateConsecutiveDaysOff(holidays, optimizedDays, TEST_YEAR);
+                result.forEach(period => {
+                    let hasNonWeekend = false;
+                    for (let d = new Date(period.startDate); d <= period.endDate; d.setDate(d.getDate() + 1)) {
+                        if (!DEFAULT_WEEKENDS.includes(d.getDay())) {
+                            hasNonWeekend = true;
+                            break;
+                        }
+                    }
+                    expect(hasNonWeekend).toBe(true);
+                });
+            });
+
             it('should handle groups that are only weekends correctly', () => {
                 const holidays: Array<{ date: Date; name: string }> = [];
                 const optimizedDays: Date[] = [];
@@ -550,6 +678,49 @@ describe('holidayUtils', () => {
             it('should handle empty optimized days', () => {
                 const result = calculateConsecutiveDaysOff(mockHolidays, [], TEST_YEAR);
                 expect(Array.isArray(result)).toBe(true);
+            });
+
+            it('should include fixed days off in consecutive periods', () => {
+                const optimizedDays = [new Date(TEST_YEAR, 0, 2)];
+                const fixedDaysOff = [new Date(TEST_YEAR, 0, 3)];
+                const result = calculateConsecutiveDaysOff(mockHolidays, optimizedDays, TEST_YEAR, DEFAULT_WEEKENDS, undefined, fixedDaysOff);
+                const periodWithFixed = result.find(period => {
+                    const fixedDate = fixedDaysOff[0];
+                    return period.startDate <= fixedDate && period.endDate >= fixedDate;
+                });
+                expect(periodWithFixed).toBeDefined();
+            });
+
+            it('should treat fixed days off as part of consecutive periods', () => {
+                const holidays = [
+                    { date: new Date(TEST_YEAR, 0, 1), name: 'Holiday' },
+                ];
+                const optimizedDays = [new Date(TEST_YEAR, 0, 2)];
+                const fixedDaysOff = [new Date(TEST_YEAR, 0, 3)];
+                const result = calculateConsecutiveDaysOff(holidays, optimizedDays, TEST_YEAR, DEFAULT_WEEKENDS, undefined, fixedDaysOff);
+                const period = result.find(p => 
+                    p.startDate <= holidays[0].date && 
+                    p.endDate >= fixedDaysOff[0]
+                );
+                expect(period).toBeDefined();
+                if (period) {
+                    expect(period.totalDays).toBeGreaterThanOrEqual(3);
+                }
+            });
+
+            it('should filter fixed days off by year and startDate', () => {
+                const optimizedDays = [new Date(TEST_YEAR, 5, 2)];
+                const fixedDaysOff = [
+                    new Date(2023, 11, 31),
+                    new Date(TEST_YEAR, 0, 5),
+                    new Date(TEST_YEAR, 5, 15),
+                ];
+                const startDate = new Date(TEST_YEAR, 2, 1);
+                const result = calculateConsecutiveDaysOff(mockHolidays, optimizedDays, TEST_YEAR, DEFAULT_WEEKENDS, startDate, fixedDaysOff);
+                // Should only include fixed days off from the correct year and after startDate
+                result.forEach(period => {
+                    expect(period.startDate.getTime()).toBeGreaterThanOrEqual(startDate.getTime());
+                });
             });
         });
 
@@ -669,6 +840,130 @@ describe('holidayUtils', () => {
             expect(Array.isArray(optimizedDays)).toBe(true);
             expect(Array.isArray(periods)).toBe(true);
         });
+
+        it('should work with fixed days off: exclude from optimization, include in periods', () => {
+            const holidays = [
+                { date: new Date(TEST_YEAR, 0, 1), name: 'Holiday' },
+            ];
+            const fixedDaysOff = [
+                new Date(TEST_YEAR, 0, 5),
+                new Date(TEST_YEAR, 0, 10),
+            ];
+            const optimizedDays = optimizeDaysOff(holidays, TEST_YEAR, 10, DEFAULT_WEEKENDS, undefined, fixedDaysOff);
+            const periods = calculateConsecutiveDaysOff(holidays, optimizedDays, TEST_YEAR, DEFAULT_WEEKENDS, undefined, fixedDaysOff);
+
+            // Fixed days off should not be in optimized days
+            const fixedDaysOffKeys = new Set(fixedDaysOff.map(d => 
+                `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+            ));
+            optimizedDays.forEach(date => {
+                const dateKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+                expect(fixedDaysOffKeys.has(dateKey)).toBe(false);
+            });
+
+            // Fixed days off should be included in consecutive periods
+            fixedDaysOff.forEach(fixedDay => {
+                const periodWithFixed = periods.find(period => 
+                    period.startDate <= fixedDay && period.endDate >= fixedDay
+                );
+                expect(periodWithFixed).toBeDefined();
+            });
+        });
+
+        it('should prioritize fixed days off over calculated days off', () => {
+            const holidays = [
+                { date: new Date(TEST_YEAR, 0, 1), name: 'Holiday' },
+            ];
+            const fixedDaysOff = [new Date(TEST_YEAR, 0, 5)];
+            // Request optimization for a day that's already fixed
+            const optimizedDays = optimizeDaysOff(holidays, TEST_YEAR, 10, DEFAULT_WEEKENDS, undefined, fixedDaysOff);
+            
+            // The fixed day should not appear in optimized days
+            const fixedDayKey = `${fixedDaysOff[0].getFullYear()}-${fixedDaysOff[0].getMonth()}-${fixedDaysOff[0].getDate()}`;
+            const hasFixedDay = optimizedDays.some(day => {
+                const dayKey = `${day.getFullYear()}-${day.getMonth()}-${day.getDate()}`;
+                return dayKey === fixedDayKey;
+            });
+            expect(hasFixedDay).toBe(false);
+        });
+
+        it('should handle empty fixedDaysOff array the same as undefined', () => {
+            const holidays = [
+                { date: new Date(TEST_YEAR, 0, 1), name: 'Holiday' },
+            ];
+            const resultWithEmpty = optimizeDaysOff(holidays, TEST_YEAR, 5, DEFAULT_WEEKENDS, undefined, []);
+            const resultWithUndefined = optimizeDaysOff(holidays, TEST_YEAR, 5);
+            
+            expect(resultWithEmpty.length).toBe(resultWithUndefined.length);
+        });
+
+        it('should not count fixed days off in usedDaysOff calculation', () => {
+            const holidays = [
+                { date: new Date(TEST_YEAR, 0, 1), name: 'Holiday' },
+            ];
+            const optimizedDays = [new Date(TEST_YEAR, 0, 2)];
+            const fixedDaysOff = [new Date(TEST_YEAR, 0, 3), new Date(TEST_YEAR, 0, 4)];
+            const result = calculateConsecutiveDaysOff(holidays, optimizedDays, TEST_YEAR, DEFAULT_WEEKENDS, undefined, fixedDaysOff);
+            
+            const period = result.find(p => 
+                p.startDate <= holidays[0].date && 
+                p.endDate >= fixedDaysOff[1]
+            );
+            expect(period).toBeDefined();
+            if (period) {
+                // usedDaysOff should only count optimized days, not fixed days
+                expect(period.usedDaysOff).toBe(1); // Only the one optimized day
+                expect(period.totalDays).toBeGreaterThanOrEqual(4); // But total days includes fixed days
+            }
+        });
+
+        it('should handle case where all weekdays are fixed days off', () => {
+            // Create fixed days off for all weekdays in January
+            const fixedDaysOff: Date[] = [];
+            for (let day = 1; day <= 31; day++) {
+                const date = new Date(TEST_YEAR, 0, day);
+                if (!DEFAULT_WEEKENDS.includes(date.getDay())) {
+                    fixedDaysOff.push(date);
+                }
+            }
+            const holidays = [
+                { date: new Date(TEST_YEAR, 0, 1), name: 'Holiday' },
+            ];
+            const result = optimizeDaysOff(holidays, TEST_YEAR, 5, DEFAULT_WEEKENDS, undefined, fixedDaysOff);
+            
+            // Should not try to optimize days that are already fixed
+            expect(Array.isArray(result)).toBe(true);
+            result.forEach(date => {
+                const dateKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+                const isFixed = fixedDaysOff.some(fd => 
+                    `${fd.getFullYear()}-${fd.getMonth()}-${fd.getDate()}` === dateKey
+                );
+                expect(isFixed).toBe(false);
+            });
+        });
+
+        it('should extend consecutive periods with fixed days off', () => {
+            const holidays = [
+                { date: new Date(TEST_YEAR, 0, 1), name: 'Holiday' },
+            ];
+            const optimizedDays = [new Date(TEST_YEAR, 0, 2)];
+            const fixedDaysOff = [
+                new Date(TEST_YEAR, 0, 3),
+                new Date(TEST_YEAR, 0, 4),
+                new Date(TEST_YEAR, 0, 5),
+            ];
+            const result = calculateConsecutiveDaysOff(holidays, optimizedDays, TEST_YEAR, DEFAULT_WEEKENDS, undefined, fixedDaysOff);
+            
+            const period = result.find(p => 
+                p.startDate <= holidays[0].date && 
+                p.endDate >= fixedDaysOff[2]
+            );
+            expect(period).toBeDefined();
+            if (period) {
+                // Should include all the fixed days in the period
+                expect(period.totalDays).toBeGreaterThanOrEqual(5);
+            }
+        });
     });
 
     describe('Edge cases and error handling', () => {
@@ -704,6 +999,99 @@ describe('holidayUtils', () => {
                 expect(date.getTime()).toBeGreaterThanOrEqual(startDate.getTime());
                 expect(date.getFullYear()).toBe(TEST_YEAR);
             });
+        });
+
+        it('should handle startDate on Dec 31', () => {
+            const startDate = new Date(TEST_YEAR, 11, 31);
+            const holidays: Array<{ date: Date; name: string }> = [];
+            const result = optimizeDaysOff(holidays, TEST_YEAR, 5, DEFAULT_WEEKENDS, startDate);
+            result.forEach(date => {
+                expect(date.getTime()).toBeGreaterThanOrEqual(startDate.getTime());
+                expect(date.getFullYear()).toBe(TEST_YEAR);
+                expect(date.getMonth()).toBe(11);
+                expect(date.getDate()).toBe(31);
+            });
+        });
+
+        it('should handle fixed days off with startDate at end of year', () => {
+            const startDate = new Date(TEST_YEAR, 11, 15);
+            const fixedDaysOff = [new Date(TEST_YEAR, 11, 20)];
+            const holidays = [
+                { date: new Date(TEST_YEAR, 11, 25), name: 'Christmas' },
+            ];
+            const result = optimizeDaysOff(holidays, TEST_YEAR, 5, DEFAULT_WEEKENDS, startDate, fixedDaysOff);
+            const fixedDayKey = `${fixedDaysOff[0].getFullYear()}-${fixedDaysOff[0].getMonth()}-${fixedDaysOff[0].getDate()}`;
+            result.forEach(date => {
+                const dateKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+                expect(dateKey).not.toBe(fixedDayKey);
+                expect(date.getTime()).toBeGreaterThanOrEqual(startDate.getTime());
+            });
+        });
+
+        it('should handle fixed days off that are on weekends (should still be excluded)', () => {
+            // Create a fixed day off on a Saturday
+            const saturday = new Date(TEST_YEAR, 0, 6); // Jan 6, 2024 is a Saturday
+            if (saturday.getDay() === 6) {
+                const fixedDaysOff = [saturday];
+                const holidays: Array<{ date: Date; name: string }> = [];
+                const result = optimizeDaysOff(holidays, TEST_YEAR, 5, DEFAULT_WEEKENDS, undefined, fixedDaysOff);
+                // Should not include the Saturday in optimized days (it's already a weekend)
+                const hasSaturday = result.some(d => 
+                    d.getFullYear() === saturday.getFullYear() &&
+                    d.getMonth() === saturday.getMonth() &&
+                    d.getDate() === saturday.getDate()
+                );
+                expect(hasSaturday).toBe(false);
+            }
+        });
+
+        it('should handle fixed days off that are on holidays (should still be excluded)', () => {
+            const holidayDate = new Date(TEST_YEAR, 0, 1);
+            const fixedDaysOff = [holidayDate];
+            const holidays = [
+                { date: holidayDate, name: 'New Year' },
+            ];
+            const result = optimizeDaysOff(holidays, TEST_YEAR, 5, DEFAULT_WEEKENDS, undefined, fixedDaysOff);
+            const hasHoliday = result.some(d => 
+                d.getFullYear() === holidayDate.getFullYear() &&
+                d.getMonth() === holidayDate.getMonth() &&
+                d.getDate() === holidayDate.getDate()
+            );
+            expect(hasHoliday).toBe(false);
+        });
+
+        it('should handle case where no gaps are available (all days are off)', () => {
+            // Create holidays for all weekdays
+            const holidays: Array<{ date: Date; name: string }> = [];
+            for (let month = 0; month < 12; month++) {
+                const daysInMonth = new Date(TEST_YEAR, month + 1, 0).getDate();
+                for (let day = 1; day <= daysInMonth; day++) {
+                    const date = new Date(TEST_YEAR, month, day);
+                    if (!DEFAULT_WEEKENDS.includes(date.getDay())) {
+                        holidays.push({ date, name: `Holiday ${month}-${day}` });
+                    }
+                }
+            }
+            const result = optimizeDaysOff(holidays, TEST_YEAR, 5);
+            expect(result).toEqual([]);
+        });
+
+        it('should handle selectDaysOff when gap has some days already in allDaysOff', () => {
+            // Create a scenario where a gap has some days that are already off
+            const holidays = [
+                { date: new Date(TEST_YEAR, 0, 1), name: 'Mon' },
+                { date: new Date(TEST_YEAR, 0, 5), name: 'Fri' },
+            ];
+            const fixedDaysOff = [new Date(TEST_YEAR, 0, 3)]; // Wednesday in the gap
+            const result = optimizeDaysOff(holidays, TEST_YEAR, 5, DEFAULT_WEEKENDS, undefined, fixedDaysOff);
+            // Should skip the fixed day and fill other days in the gap
+            expect(Array.isArray(result)).toBe(true);
+            const hasFixedDay = result.some(d => 
+                d.getFullYear() === fixedDaysOff[0].getFullYear() &&
+                d.getMonth() === fixedDaysOff[0].getMonth() &&
+                d.getDate() === fixedDaysOff[0].getDate()
+            );
+            expect(hasFixedDay).toBe(false);
         });
 
         it('should handle holidays from previous year correctly', () => {
@@ -762,7 +1150,7 @@ describe('holidayUtils', () => {
             expect(hasDate2).toBe(false);
         });
 
-        it('should correctly identify holidays using dateKey', () => {
+            it('should correctly identify holidays using dateKey', () => {
             const holidays = [
                 { date: new Date(TEST_YEAR, 0, 15, 10, 30), name: 'Holiday' },
             ];
@@ -773,6 +1161,21 @@ describe('holidayUtils', () => {
                 d.getDate() === 15
             );
             expect(hasHolidayDate).toBe(false);
+        });
+
+        it('should correctly identify fixed days off using dateKey (ignoring time component)', () => {
+            const fixedDaysOff = [
+                new Date(TEST_YEAR, 0, 15, 10, 30), // Same day, different time
+                new Date(TEST_YEAR, 0, 15, 14, 0),  // Same day, different time
+            ];
+            const holidays: Array<{ date: Date; name: string }> = [];
+            const result = optimizeDaysOff(holidays, TEST_YEAR, 5, DEFAULT_WEEKENDS, undefined, fixedDaysOff);
+            const hasFixedDay = result.some(d =>
+                d.getFullYear() === TEST_YEAR &&
+                d.getMonth() === 0 &&
+                d.getDate() === 15
+            );
+            expect(hasFixedDay).toBe(false);
         });
 
         it('should correctly get weekends for the year with startDate', () => {

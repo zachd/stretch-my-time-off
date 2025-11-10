@@ -10,6 +10,8 @@
     export let weekendDays: number[] = [6, 0];
     export let startDate: Date = new Date(year, 0, 1);
     export let isActive: boolean = true;
+    export let fixedDaysOff: Date[] = [];
+    export let onDayClick: ((date: Date) => void) | undefined = undefined;
 
     // Function to determine the first day of the week based on locale
     function getFirstDayOfWeek(locale: string): number {
@@ -57,6 +59,34 @@
             date.getMonth() === month &&
             date.getDate() === day
         );
+    }
+
+    function isFixedDayOff(day: number): boolean {
+        return fixedDaysOff.some(date => 
+            date.getFullYear() === year &&
+            date.getMonth() === month &&
+            date.getDate() === day
+        );
+    }
+
+    function getDayTooltip(day: number): string {
+        const date = new Date(year, month, day);
+        if (isWeekend(date)) {
+            return 'Weekend';
+        } else if (isFixedDayOff(day)) {
+            return 'Day off (fixed)';
+        } else if (isOptimizedDayOff(day)) {
+            return 'Day off (calculated)';
+        } else {
+            return 'Tap to select fixed day off';
+        }
+    }
+
+    function handleDayClick(day: number) {
+        const date = new Date(year, month, day);
+        const holiday = getHoliday(day);
+        if (isPastDate(day) || !onDayClick || isWeekend(date) || holiday) return;
+        onDayClick(date);
     }
 
     function getDominantMonth(period: { startDate: Date; endDate: Date }): number {
@@ -111,11 +141,20 @@
     {#each Array.from({ length: daysInMonth }, (_, i) => i + 1) as day}
         {@const holiday = getHoliday(day)}
         {@const pastDate = isPastDate(day)}
-        <div class="day {isWeekend(new Date(year, month, day)) ? 'weekend' : ''} {holiday ? 'holiday' : ''} {isOptimizedDayOff(day) ? 'optimized' : ''} {isConsecutiveDayOff(day) ? 'consecutive-day' : ''} {pastDate ? 'past-date' : ''}">
+        {@const fixedDay = isFixedDayOff(day)}
+        {@const optimizedDay = isOptimizedDayOff(day)}
+        {@const dayDate = new Date(year, month, day)}
+        {@const isWeekendDay = isWeekend(dayDate)}
+        {@const tooltipText = holiday ? holiday.name : getDayTooltip(day)}
+        {@const canClick = onDayClick && !pastDate && !isWeekendDay && !holiday}
+        <div 
+            class="day {isWeekendDay ? 'weekend' : ''} {holiday ? 'holiday' : ''} {optimizedDay ? 'optimized' : ''} {fixedDay ? 'fixed' : ''} {isConsecutiveDayOff(day) ? 'consecutive-day' : ''} {pastDate ? 'past-date' : ''} {canClick ? 'clickable' : ''}"
+            on:click={() => handleDayClick(day)}
+            role={canClick ? 'button' : undefined}
+            tabindex={canClick ? 0 : undefined}
+        >
             <span class={holiday?.hidden ? 'strikethrough' : ''}>{day}</span>
-            {#if holiday}
-                <Tooltip text={holiday.name} />
-            {/if}
+            <Tooltip text={tooltipText} />
         </div>
     {/each}
 </div>
@@ -178,9 +217,20 @@
     .optimized {
         background-color: #4caf50;
     }
+    .fixed {
+        background-color: #2e7d32;
+        border: 2px solid #66bb6a;
+    }
     .holiday {
         background-color: #3b1e6e;
+    }
+    .clickable {
         cursor: pointer;
+    }
+    .clickable:hover {
+        opacity: 0.8;
+        transform: scale(1.05);
+        transition: transform 0.1s, opacity 0.1s;
     }
     .consecutive-day {
         border: 1px solid rgba(255, 255, 255, 0.7);
